@@ -14,39 +14,78 @@ dependencias, solo Node 18 o más nuevo.
 
 ## Fuentes
 
-| Fuente | Cómo se consigue | Qué aporta | Clave |
-|---|---|---|---|
-| Open-Meteo | API oficial gratis | 7 modelos (ECMWF, GFS, ICON, GEM, Météo-France, UKMO, JMA), 10 días | No |
-| AccuWeather | API oficial | 5 días | Sí (gratis, 50 consultas por día) |
-| Foreca | API oficial | 10 días | Sí (prueba de 30 días) |
-| MetSul | JSON interno de su web | 10 días, sur de Sudamérica | No |
-| INUMET | JSON interno de su web | 7 días, solo máxima y mínima, solo Uruguay (7 zonas) | No |
+**Sin clave** (andan apenas lo arrancás):
 
-- Los 7 modelos de Open-Meteo se promedian entre sí y entran como **una sola
-  fuente** al promedio general, para que no le ganen por cantidad a las demás.
+| Fuente | Qué aporta |
+|---|---|
+| Open-Meteo | 9 modelos: ECMWF, ECMWF AIFS (IA), GFS, ICON, GEM, Météo-France, UKMO, JMA y CMA. 10 días |
+| Ensambles (Open-Meteo) | 143 escenarios de ECMWF, GFS, ICON y GEM. Da la probabilidad de lluvia y la lluvia promedio |
+| MET Norway (yr.no) | Global, por hora los primeros días. Hoy no cuenta porque ya va empezado |
+| MetSul | 10 días, sur de Sudamérica (JSON interno de su web) |
+| INUMET | 7 días, solo máxima y mínima, solo Uruguay (JSON interno de su web) |
+| wttr.in | 3 días, datos de World Weather Online |
+| 7Timer! | 7 días, solo máxima y mínima (modelo GFS) |
+
+**Con clave gratis** (se activan cuando ponés la clave en `config.local.json`):
+
+| Fuente | Plan gratis | Dónde se saca |
+|---|---|---|
+| AccuWeather | 50 consultas por día, 5 días | <https://developer.accuweather.com> |
+| Foreca | prueba de 30 días | <https://developer.foreca.com> |
+| OpenWeatherMap | 5 días | <https://home.openweathermap.org/api_keys> |
+| WeatherAPI.com | 3 días | <https://www.weatherapi.com/signup.aspx> |
+| Visual Crossing | 1000 registros por día | <https://www.visualcrossing.com/sign-up> |
+
+- Cada proveedor cuenta **una vez** en el promedio: los 9 modelos de Open-Meteo
+  se promedian entre sí primero, para que no le ganen por cantidad a los demás.
+- Varias fuentes usan por debajo los mismos modelos (por ejemplo, MET Norway
+  usa ECMWF fuera de Europa y 7Timer usa GFS), así que no son del todo
+  independientes.
 - Si una fuente falla o no cubre el lugar, se saltea y el promedio sigue con
   las demás. En la pantalla se ve cuál entró y cuál no.
-- **BoosterAgro** no está: su web vieja ya no anda (el servidor de la API no
-  existe más) y la app del celular pide usuario. Para sumarla habría que
-  estudiar cómo habla la app con su servidor.
+- **BoosterAgro** no está: su web vieja ya no anda y la app del celular pide
+  usuario. **SMN Argentina** publica un pronóstico por estación en texto, pero
+  sin coordenadas; quedó para más adelante.
 
-## Claves de AccuWeather y Foreca
+## Lluvia
+
+Para cada día: milímetros promedio, probabilidad promedio y cuántas fuentes
+dan lluvia (1 mm o más). También la lluvia acumulada en 3 y 7 días, la del
+promedio y la de cada fuente.
+
+## Análisis con IA
+
+El botón "Analizar" le pasa a una IA todo lo que dijo cada fuente y el
+promedio, y te devuelve un resumen: lluvia, temperaturas, en qué no coinciden
+las fuentes y algún consejo. Corre en tu compu con [Ollama](https://ollama.com):
+gratis, sin cuentas ni claves, y los datos no salen de tu máquina.
+
+```bash
+# Arch Linux (en otros sistemas: https://ollama.com/download)
+sudo pacman -S ollama
+sudo systemctl enable --now ollama
+ollama pull gemma3:4b      # unos 3 GB
+```
+
+Con otro modelo, cambiá `ia.modelo` en `config.local.json`. En una compu sin
+placa de video, un modelo de 4B tarda más o menos un minuto en escribir el
+análisis.
+
+## Claves y configuración
 
 1. Copiá `config.ejemplo.json` a `config.local.json`. Ese archivo no se sube
    a git.
-2. AccuWeather: creá una cuenta en <https://developer.accuweather.com>, creá
-   una app y pegá la clave en `accuweather.clave`.
-3. Foreca: pedí la prueba en <https://developer.foreca.com>, creá la clave en
-   "My API" y pegala en `foreca.clave`.
-4. Reiniciá el servidor. Al arrancar muestra qué fuentes quedaron activas.
+2. Pegá las claves que tengas. Las que queden vacías se saltean.
+3. Reiniciá el servidor. Al arrancar muestra qué fuentes quedaron activas.
 
 ## Cómo está armado
 
 ```
-server.js              servidor HTTP + /api/buscar + /api/pronostico
+server.js              servidor HTTP + /api/buscar, /api/pronostico y /api/analisis
 lib/fuentes/*.js       una fuente por archivo, todas devuelven el mismo formato
-lib/promedio.js        el promedio (media, mínimo, máximo y cuántas fuentes)
-lib/util.js            fetch con timeout y caché en memoria
+lib/promedio.js        el promedio (media, rango, cuántas fuentes) y la lluvia acumulada
+lib/ia.js              arma el mensaje para la IA y habla con Ollama
+lib/util.js            fetch con timeout, caché en memoria y paso de horas a días
 public/                la página (HTML, CSS y JS sin frameworks)
 ```
 
@@ -55,14 +94,14 @@ viento }` con `null` donde no tiene el dato. Para sumar una fuente nueva se
 copia un archivo de `lib/fuentes/` y se agrega a la lista `FUENTES` de
 `server.js`.
 
-Las respuestas se guardan en memoria un rato (Open-Meteo 30 min, MetSul 1 h,
-INUMET 10 min, AccuWeather 3 h) para no molestar a las fuentes ni gastar las
-consultas gratis.
+Las respuestas se guardan en memoria un rato (entre 10 minutos y 3 horas,
+según la fuente) para no molestar a las fuentes ni gastar las consultas
+gratis.
 
 ## Para uso personal
 
 PromClim está pensado para que cada uno lo corra en su propia compu, con sus
-propias claves de AccuWeather y Foreca. No es para montarlo como página
+propias claves. No es para montarlo como página
 pública: MetSul e INUMET no tienen API pública (se usan los mismos pedidos que
-hacen sus páginas) y los planes gratis de AccuWeather y Foreca tienen límites
+hacen sus páginas) y los planes gratis de las APIs con clave tienen límites
 por clave. La app muestra de qué fuente sale cada dato, con enlace a cada una.

@@ -40,14 +40,31 @@
     <section id="contenido" hidden>
       <article class="tarjeta hoy" id="hoy"></article>
 
+      <article class="tarjeta ia" id="ia">
+        <div class="ia-cabeza">
+          <span class="icono">auto_awesome</span>
+          <h3>Análisis con IA</h3>
+          <button id="analizar" class="boton-tonal">Analizar</button>
+        </div>
+        <p class="ia-ayuda" id="ia-ayuda">Una IA que corre en tu compu lee lo que dicen todas las fuentes y te lo explica.</p>
+        <div class="ia-texto" id="ia-texto" hidden></div>
+      </article>
+
       <h2>Próximos días</h2>
       <ul class="lista-dias" id="dias"></ul>
+
+      <h2>Lluvia acumulada</h2>
+      <article class="tarjeta" id="lluvia"></article>
 
       <h2>Fuentes</h2>
       <div class="chips" id="fuentes"></div>
 
       <details class="tarjeta detalle">
         <summary><span class="icono">table_chart</span>Qué dice cada fuente</summary>
+        <div class="segmentado" role="tablist" id="vista-tabla">
+          <button role="tab" aria-selected="true" data-vista="temp">Temperatura</button>
+          <button role="tab" aria-selected="false" data-vista="lluvia">Lluvia</button>
+        </div>
         <div class="tabla-scroll" id="tabla"></div>
       </details>
     </section>

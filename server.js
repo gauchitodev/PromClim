@@ -2,8 +2,10 @@
  * PromClim — servidor. Sin dependencias: Node >= 18.
  *
  *   GET /api/buscar?q=Trinidad            → lugares (geocoding de Open-Meteo)
- *   GET /api/pronostico?lat=&lon=&nombre=&pais=&zona=
+ *   GET /api/pronostico?lat=&lon=&nombre=&detalle=&pais=&zona=
  *                                          → cada fuente + el promedio
+ *   GET /api/analisis?(lo mismo)           → análisis con IA (Ollama), en texto
+ *                                            que va llegando de a pedazos
  *   GET /*                                 → archivos de public/
  */
 import http from 'node:http';
@@ -14,17 +16,30 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { pedirJSON, conCache } from './lib/util.js';
-import { promedioGeneral } from './lib/promedio.js';
+import { promedioGeneral, acumulados } from './lib/promedio.js';
+import { analizar } from './lib/ia.js';
 import openmeteo from './lib/fuentes/openmeteo.js';
 import inumet from './lib/fuentes/inumet.js';
 import metsul from './lib/fuentes/metsul.js';
 import accuweather from './lib/fuentes/accuweather.js';
 import foreca from './lib/fuentes/foreca.js';
+import ensambles from './lib/fuentes/ensambles.js';
+import metno from './lib/fuentes/metno.js';
+import septimer from './lib/fuentes/septimer.js';
+import wttr from './lib/fuentes/wttr.js';
+import openweathermap from './lib/fuentes/openweathermap.js';
+import weatherapi from './lib/fuentes/weatherapi.js';
+import visualcrossing from './lib/fuentes/visualcrossing.js';
 
 // Con el hotspot a veces IPv6 no sale y los pedidos se cuelgan 10 s.
 dns.setDefaultResultOrder('ipv4first');
 
-const FUENTES = [openmeteo, accuweather, foreca, metsul, inumet];
+const FUENTES = [
+  // Sin clave
+  openmeteo, ensambles, metno, metsul, inumet, wttr, septimer,
+  // Con clave (gratis) en config.local.json
+  accuweather, foreca, openweathermap, weatherapi, visualcrossing,
+];
 
 const RAIZ = path.dirname(fileURLToPath(import.meta.url));
 const PUBLICO = path.join(RAIZ, 'public');
@@ -96,10 +111,12 @@ async function pronostico(lugar) {
   }));
 
   const ok = fuentes.filter((f) => f.estado === 'ok');
+  const promedio = promedioGeneral(ok.map((f) => f.dias), hoyEn(lugar.zona));
   return {
     lugar,
     generado: new Date().toISOString(),
-    promedio: promedioGeneral(ok.map((f) => f.dias), hoyEn(lugar.zona)),
+    promedio,
+    acumulados: acumulados(ok, promedio),
     fuentes,
   };
 }
@@ -134,24 +151,60 @@ async function servirArchivo(res, ruta) {
   }
 }
 
+function leerLugar(p) {
+  const lat = Number(p.get('lat')), lon = Number(p.get('lon'));
+  if (!p.get('lat') || !p.get('lon') || !Number.isFinite(lat) || !Number.isFinite(lon)
+      || Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+  return {
+    lat, lon,
+    nombre: (p.get('nombre') || '').slice(0, 80),
+    detalle: (p.get('detalle') || '').slice(0, 120),
+    pais: (p.get('pais') || '').toUpperCase().slice(0, 2) || null,
+    zona: p.get('zona') || 'UTC',
+  };
+}
+
+// El análisis tarda: se guarda 30 min por lugar para no repetirlo al recargar.
+const analisisHechos = new Map();
+
+async function responderAnalisis(res, datos) {
+  if (!datos.promedio.length) return responderJSON(res, 422, { error: 'No hay datos para analizar' });
+  const clave = `${datos.lugar.lat.toFixed(2)},${datos.lugar.lon.toFixed(2)}`;
+  const previo = analisisHechos.get(clave);
+  const cabecera = { 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' };
+  if (previo && Date.now() - previo.t < 30 * 60e3) {
+    res.writeHead(200, cabecera);
+    return res.end(previo.texto);
+  }
+
+  let texto = '';
+  try {
+    await analizar(datos, config, (pedazo) => {
+      if (!res.headersSent) res.writeHead(200, cabecera);
+      texto += pedazo;
+      res.write(pedazo);
+    });
+  } catch (e) {
+    if (res.headersSent) return res.end(`\n\n[Se cortó el análisis: ${e.message}]`);
+    return responderJSON(res, 503, { error: e.message, codigo: e.codigo || 'ia', modelo: e.modelo });
+  }
+  if (!res.headersSent) res.writeHead(200, cabecera);
+  if (texto) analisisHechos.set(clave, { t: Date.now(), texto });
+  res.end();
+}
+
 const servidor = http.createServer(async (req, res) => {
   const url = new URL(req.url, 'http://x');
   try {
     if (url.pathname === '/api/buscar') {
       return responderJSON(res, 200, await buscar(url.searchParams.get('q') || ''));
     }
-    if (url.pathname === '/api/pronostico') {
-      const p = url.searchParams;
-      const lat = Number(p.get('lat')), lon = Number(p.get('lon'));
-      if (!Number.isFinite(lat) || !Number.isFinite(lon) || Math.abs(lat) > 90 || Math.abs(lon) > 180) {
-        return responderJSON(res, 400, { error: 'Coordenadas inválidas' });
-      }
-      return responderJSON(res, 200, await pronostico({
-        lat, lon,
-        nombre: (p.get('nombre') || '').slice(0, 80),
-        pais: (p.get('pais') || '').toUpperCase().slice(0, 2) || null,
-        zona: p.get('zona') || 'UTC',
-      }));
+    if (url.pathname === '/api/pronostico' || url.pathname === '/api/analisis') {
+      const lugar = leerLugar(url.searchParams);
+      if (!lugar) return responderJSON(res, 400, { error: 'Coordenadas inválidas' });
+      const datos = await pronostico(lugar);
+      if (url.pathname === '/api/pronostico') return responderJSON(res, 200, datos);
+      return responderAnalisis(res, datos);
     }
     if (req.method !== 'GET') return responderJSON(res, 405, { error: 'Método no permitido' });
     return servirArchivo(res, decodeURIComponent(url.pathname));
