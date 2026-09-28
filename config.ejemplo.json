@@ -1,7 +1,8 @@
 {
-  "puerto": 8080,
+  "puerto": 8741,
   "host": "127.0.0.1",
   "hostsPermitidos": [],
+  "apagarSinUsoMin": 20,
   "ia": {
     "url": "http://127.0.0.1:11434",
     "modelo": "gemma3:4b"

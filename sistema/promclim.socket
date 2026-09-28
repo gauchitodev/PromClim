@@ -1,0 +1,10 @@
+[Unit]
+Description=PromClim: espera en el puerto y arranca el servidor al primer pedido
+
+[Socket]
+ListenStream=127.0.0.1:__PUERTO__
+# Un solo proceso atiende todo (no uno por conexión)
+Accept=no
+
+[Install]
+WantedBy=sockets.target

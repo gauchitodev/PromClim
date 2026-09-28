@@ -11,7 +11,7 @@
 import http from 'node:http';
 import dns from 'node:dns';
 import { readFile } from 'node:fs/promises';
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -65,8 +65,16 @@ function leerConfig() {
   }
 }
 const config = leerConfig();
-const PUERTO = Number(process.env.PORT) || config.puerto || 8080;
+// 8741 y no 8080: el 8080 lo usan por defecto muchísimos programas.
+const PUERTO = Number(process.env.PORT) || config.puerto || 8741;
 const HOST = process.env.HOST || config.host || '127.0.0.1';
+
+// Arranque bajo demanda: systemd (promclim.socket) escucha el puerto y, al
+// primer pedido, arranca PromClim y le pasa el socket ya abierto (fd 3).
+const DE_SYSTEMD = process.env.LISTEN_FDS === '1' && Number(process.env.LISTEN_PID) === process.pid;
+// En ese modo se apaga solo después de un rato sin uso; systemd lo vuelve a
+// prender en el próximo pedido.
+const APAGAR_SIN_USO_MIN = Number(config.apagarSinUsoMin) || 20;
 
 // ---------------------------------------------------------------------------
 
@@ -147,6 +155,53 @@ async function pronostico(lugar) {
 }
 
 // ---------------------------------------------------------------------------
+
+// ---------------------------------------------------------------------------
+// Último lugar elegido en la página. Lo usa /api/resumen (el widget del
+// escritorio), que no tiene cómo saber qué buscaste en el navegador.
+// ---------------------------------------------------------------------------
+
+const ARCHIVO_ULTIMO = path.join(RAIZ, 'ultimo-lugar.local.json');
+
+function leerUltimoLugar() {
+  try {
+    const l = JSON.parse(readFileSync(ARCHIVO_ULTIMO, 'utf8'));
+    const p = new URLSearchParams(Object.entries(l).map(([k, v]) => [k, String(v ?? '')]));
+    return leerLugar(p);
+  } catch {
+    return null;
+  }
+}
+
+function guardarUltimoLugar(lugar) {
+  const previo = leerUltimoLugar();
+  if (previo && previo.lat === lugar.lat && previo.lon === lugar.lon && previo.nombre === lugar.nombre) return;
+  try {
+    writeFileSync(ARCHIVO_ULTIMO, JSON.stringify(lugar, null, 2) + '\n');
+  } catch (e) {
+    console.warn('No pude guardar el último lugar:', e.message);
+  }
+}
+
+/** Lo justo para un widget: el lugar y los próximos 3 días promediados. */
+async function resumen() {
+  const lugar = leerUltimoLugar();
+  if (!lugar) return { sinLugar: true };
+  const datos = await pronostico(lugar);
+  const ok = datos.fuentes.filter((f) => f.estado === 'ok');
+  const r = (c) => (c ? Math.round(c.prom * 10) / 10 : null);
+  return {
+    lugar: { nombre: lugar.nombre, detalle: lugar.detalle },
+    generado: datos.generado,
+    fuentes: { ok: ok.length, total: datos.fuentes.filter((f) => f.estado !== 'omitida').length },
+    acumulado7: datos.acumulados.promedio.d7,
+    dias: datos.promedio.slice(0, 3).map((d) => ({
+      fecha: d.fecha,
+      max: r(d.max), min: r(d.min), lluvia: r(d.lluvia), prob: r(d.prob),
+      llueve: d.llueve,
+    })),
+  };
+}
 
 // ---------------------------------------------------------------------------
 // Seguridad
@@ -310,7 +365,10 @@ async function responderAnalisis(req, res, datos) {
   res.end();
 }
 
+let ultimoUso = Date.now();
+
 const servidor = http.createServer(async (req, res) => {
+  ultimoUso = Date.now();
   for (const [k, v] of Object.entries(CABECERAS)) res.setHeader(k, v);
 
   if (!HOSTS_PERMITIDOS.has((req.headers.host || '').toLowerCase())) {
@@ -332,6 +390,9 @@ const servidor = http.createServer(async (req, res) => {
     if (url.pathname.startsWith('/api/')) {
       if (!pedidoPropio(req)) return responderJSON(res, 403, { error: 'Solo la página de PromClim puede usar la API' });
 
+      if (url.pathname === '/api/resumen') {
+        return responderJSON(res, 200, await resumen());
+      }
       if (url.pathname === '/api/buscar') {
         return responderJSON(res, 200, await buscar(url.searchParams.get('q') || ''));
       }
@@ -339,7 +400,10 @@ const servidor = http.createServer(async (req, res) => {
         const lugar = leerLugar(url.searchParams);
         if (!lugar) return responderJSON(res, 400, { error: 'Coordenadas inválidas' });
         const datos = await pronostico(lugar);
-        if (url.pathname === '/api/pronostico') return responderJSON(res, 200, datos);
+        if (url.pathname === '/api/pronostico') {
+          guardarUltimoLugar(lugar);
+          return responderJSON(res, 200, datos);
+        }
         return responderAnalisis(req, res, datos);
       }
       return responderJSON(res, 404, { error: 'No existe' });
@@ -353,7 +417,17 @@ const servidor = http.createServer(async (req, res) => {
   }
 });
 
-servidor.listen(PUERTO, HOST, () => {
+if (DE_SYSTEMD) {
+  // Revisa cada minuto; no se apaga en medio de un análisis de la IA.
+  setInterval(() => {
+    if (!analisisEnCurso && Date.now() - ultimoUso > APAGAR_SIN_USO_MIN * 60e3) {
+      console.log(`Sin uso hace ${APAGAR_SIN_USO_MIN} min: me apago (systemd me prende de nuevo si hace falta).`);
+      process.exit(0);
+    }
+  }, 60e3).unref();
+}
+
+servidor.listen(DE_SYSTEMD ? { fd: 3 } : { port: PUERTO, host: HOST }, () => {
   const activas = FUENTES.filter((f) => f.aplica({ lat: 0, lon: 0, pais: 'UY' }, config)).map((f) => f.nombre);
   console.log(`PromClim en http://${ES_LOCAL ? 'localhost' : HOST}:${PUERTO}`);
   console.log(`Fuentes activas: ${activas.join(', ')}`);

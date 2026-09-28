@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=PromClim
+Comment=Promedio del pronóstico de varias fuentes del clima
+Exec=env PROMCLIM_PUERTO=__PUERTO__ __CARPETA__/sistema/abrir.sh
+Icon=promclim
+Terminal=false
+Categories=Utility;
+Keywords=clima;tiempo;pronóstico;lluvia;weather;
+StartupWMClass=PromClim

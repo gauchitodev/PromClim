@@ -7,12 +7,30 @@ día, con cuánto se separan entre sí y qué dijo cada una.
 
 ## Arrancar
 
+Necesitás Node 20 o más nuevo. No hace falta `npm install`: no usa dependencias.
+
+**Como app (Linux con systemd), recomendado:**
+
+```bash
+./instalar.sh
+```
+
+Aparece **PromClim** en el menú de aplicaciones. El servidor no queda
+corriendo: arranca solo cuando abrís la app y se apaga solo después de 20
+minutos sin uso (`apagarSinUsoMin` en `config.local.json`). No pide `sudo`.
+Para sacarlo: `./instalar.sh --quitar`.
+
+**A mano:**
+
 ```bash
 npm start
 ```
 
-Después abrí <http://localhost:8080>. No hace falta `npm install`: no usa
-dependencias, solo Node 20 o más nuevo.
+Y abrí <http://localhost:8741>.
+
+El puerto es el 8741 y no el 8080 porque el 8080 lo usan por defecto muchos
+programas. Si lo necesitás para otra cosa, cambiá `"puerto"` en
+`config.local.json` y volvé a correr `./instalar.sh`.
 
 ## Fuentes
 
@@ -93,7 +111,8 @@ análisis.
 ## Cómo está armado
 
 ```
-server.js              servidor HTTP + /api/buscar, /api/pronostico y /api/analisis
+server.js              servidor HTTP + /api/buscar, /api/pronostico, /api/analisis y /api/resumen
+sistema/               arranque bajo demanda (systemd) y acceso en el menú de apps
 lib/fuentes/*.js       una fuente por archivo, todas devuelven el mismo formato
 lib/promedio.js        el promedio (media, rango, cuántas fuentes) y la lluvia acumulada
 lib/ia.js              arma el mensaje para la IA y habla con Ollama
@@ -133,7 +152,7 @@ uses vos, desde tu compu:
 
 Si querés entrar desde el celular o desde otra compu de tu casa, poné en
 `config.local.json` `"host": "0.0.0.0"` y en `"hostsPermitidos"` la dirección
-con la que vas a entrar (por ejemplo `"192.168.1.20:8080"`). Tené en cuenta
+con la que vas a entrar (por ejemplo `"192.168.1.20:8741"`). Tené en cuenta
 que cualquiera en esa red va a poder usar tus claves y tu IA. No lo expongas a
 internet.
 

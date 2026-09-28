@@ -1,0 +1,13 @@
+[Unit]
+Description=PromClim (promedio del pronóstico)
+Requires=promclim.socket
+After=promclim.socket
+
+[Service]
+ExecStart=__NODE__ __CARPETA__/server.js
+WorkingDirectory=__CARPETA__
+# Se apaga solo sin uso (exit 0): no es una falla, no hay que reiniciarlo.
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=yes
+PrivateTmp=yes
