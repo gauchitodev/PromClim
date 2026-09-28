@@ -161,6 +161,7 @@ function pintar(lugar, datos) {
   pintarDias(datos);
   pintarLluvia(acumulados);
   pintarFuentes(fuentes);
+  pintarVerificacion(datos.verificacion, fuentes);
   pintarTabla();
   $('contenido').hidden = false;
 }
@@ -178,7 +179,7 @@ function pintarHoy(lugar, d) {
       el('span', { class: 'maxima' }, grados(d.max?.prom)),
       el('span', { class: 'minima' }, `/ ${grados(d.min?.prom)}`)),
     el('p', { class: 'rango' },
-      `Promedio de ${n} ${n === 1 ? 'fuente' : 'fuentes'}`,
+      `Promedio${actual?.datos.verificacion?.ponderado ? ' ponderado por aciertos' : ''} de ${n} ${n === 1 ? 'fuente' : 'fuentes'}`,
       d.max && d.max.n > 1 ? ` · la máxima va de ${grados(d.max.min)} a ${grados(d.max.max)}` : ''),
     el('div', { class: 'chips' },
       d.lluvia && el('span', { class: 'chip', title: `Entre ${d.lluvia.min} y ${d.lluvia.max} mm según la fuente` },
@@ -406,6 +407,65 @@ function pintarFuentes(fuentes) {
     rel: 'noopener',
     title: f.motivo || f.nota || 'Ver la fuente',
   }, icono(iconos[f.estado]), f.nombre)));
+}
+
+// ---------------------------------------------------------------------------
+// Verificación: qué fuente acierta más en este lugar (solo Uruguay)
+// ---------------------------------------------------------------------------
+
+function pintarVerificacion(v, fuentes) {
+  const seccion = $('seccion-verif');
+  seccion.hidden = !v;
+  if (!v) return;
+  const caja = $('verificacion');
+
+  if (!v.estacion) {
+    caja.replaceChildren(el('p', { class: 'ia-ayuda' },
+      'No hay una estación automática de INUMET a menos de 40 km de este lugar, así que no se puede comparar.'));
+    return;
+  }
+
+  const nombres = Object.fromEntries(fuentes.map((f) => [f.id, f.nombre]));
+  nombres._simple = 'Promedio simple';
+  nombres._ponderado = 'Promedio ponderado';
+  const filas = Object.entries(v.evaluacion)
+    .filter(([id, e]) => nombres[id] && e.dias > 0)
+    .map(([id, e]) => ({ id, ...e, temp: e.errorMax != null && e.errorMin != null ? (e.errorMax + e.errorMin) / 2 : e.errorMax ?? e.errorMin }));
+  const estacion = `${v.estacion.nombre}, a ${v.estacion.km} km`;
+
+  if (!filas.length) {
+    caja.replaceChildren(
+      el('p', {}, el('strong', {}, 'Juntando datos. '),
+        `PromClim guarda lo que pronostica cada fuente y lo compara con lo que mide la estación automática de INUMET más cercana (${estacion}).`),
+      el('p', { class: 'ia-ayuda' },
+        `Pronósticos guardados: ${v.emisiones}. El primer resultado aparece cuando termine el primer día pronosticado; `
+        + `con ${v.minDias} días verificados el promedio empieza a darle más peso a las fuentes que más aciertan acá.`),
+    );
+    return;
+  }
+
+  filas.sort((a, b) => (a.temp ?? 99) - (b.temp ?? 99));
+  const maxDias = Math.max(...filas.filter((f) => !f.id.startsWith('_')).map((f) => f.dias), 0);
+  const guion = () => el('span', { class: 'bajo' }, '–');
+  caja.replaceChildren(
+    el('p', { class: 'ia-ayuda verif-intro' },
+      `Error medio de cada fuente contra la estación ${estacion}, en pronósticos hechos de 1 a 7 días antes. Menos es mejor.`),
+    el('div', { class: 'tabla-scroll sin-margen' }, el('table', { class: 'tabla-dia' },
+      el('thead', {}, el('tr', {}, el('th', {}, 'Fuente'), el('th', {}, 'Días'), el('th', {}, 'Máx'), el('th', {}, 'Mín'),
+        el('th', { title: 'En qué porcentaje de los días acertó si llovía (1 mm o más) o no' }, 'Acierta lluvia'))),
+      el('tbody', {}, filas.map((f) => el('tr', { class: f.id.startsWith('_') ? 'fila-promedio' : '' },
+        el('td', {}, nombres[f.id]),
+        el('td', {}, String(f.dias)),
+        el('td', {}, f.errorMax != null ? `±${f.errorMax}°` : guion()),
+        el('td', {}, f.errorMin != null ? `±${f.errorMin}°` : guion()),
+        el('td', {}, f.aciertoLluvia != null ? `${f.aciertoLluvia} %` : guion()),
+      ))),
+    )),
+    el('p', { class: 'nota-grafico' }, v.ponderado
+      ? 'El promedio de arriba ya está ponderado: pesa más a las fuentes con menos error acá.'
+      : `Con ${v.minDias} días verificados por fuente el promedio empieza a ponderar por aciertos (van ${maxDias}).`,
+      ' La estación mide cada hora, así que la máxima y la mínima reales pueden ser un poco más extremas.'),
+  );
 }
 
 // ---------------------------------------------------------------------------

@@ -6,6 +6,9 @@
  *                                          → cada fuente + el promedio
  *   GET /api/analisis?(lo mismo)           → análisis con IA (Ollama), en texto
  *                                            que va llegando de a pedazos
+ *   GET /api/resumen                       → próximos 3 días del último lugar (widgets)
+ *   GET /api/registrar                     → guarda pronóstico y observaciones
+ *                                            (lo llama el temporizador de systemd)
  *   GET /*                                 → archivos de public/
  */
 import http from 'node:http';
@@ -16,7 +19,11 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import { pedirJSON, conCache } from './lib/util.js';
-import { promedioGeneral, acumulados } from './lib/promedio.js';
+import { promedioGeneral, acumulados, comoFuente } from './lib/promedio.js';
+import {
+  estadoVerificacion, pesos, registrarObservaciones, registrarPronostico,
+  MIN_DIAS_PONDERAR, PROMEDIO_PONDERADO, PROMEDIO_SIMPLE,
+} from './lib/verificacion.js';
 import { analizar } from './lib/ia.js';
 import { horario } from './lib/horario.js';
 import openmeteo from './lib/fuentes/openmeteo.js';
@@ -131,6 +138,11 @@ async function pronostico(lugar) {
     return null;
   });
 
+  // La verificación baja las observaciones de INUMET: va en paralelo con las fuentes.
+  const enUruguay = inumet.aplica(lugar, config);
+  const pedidoVerificacion = enUruguay ? estadoVerificacion(lugar) : null;
+  pedidoVerificacion?.catch(() => {});
+
   const fuentes = await Promise.all(FUENTES.map(async (f) => {
     const base = { id: f.id, nombre: f.nombre, web: f.web };
     if (!f.aplica(lugar, config)) return { ...base, estado: 'omitida', motivo: f.motivoNoAplica };
@@ -143,7 +155,38 @@ async function pronostico(lugar) {
   }));
 
   const ok = fuentes.filter((f) => f.estado === 'ok');
-  const promedio = promedioGeneral(ok.map((f) => f.dias), hoyEn(lugar.zona));
+  const hoy = hoyEn(lugar.zona);
+  const simple = promedioGeneral(ok.map((f) => f.dias), hoy);
+
+  // Verificación contra las estaciones de INUMET (solo Uruguay): si ya hay
+  // días suficientes, el promedio pesa más a las fuentes que más aciertan acá.
+  let verificacion = null;
+  let promedio = simple;
+  if (enUruguay) {
+    try {
+      verificacion = await pedidoVerificacion;
+      const p = config.ponderar === false ? null : pesos(verificacion.evaluacion, ok.map((f) => f.id));
+      if (p) {
+        promedio = promedioGeneral(ok.map((f) => f.dias), hoy, ok.map((f) => ({ temp: p.temp?.[f.id], lluvia: p.lluvia?.[f.id] })));
+        verificacion.pesos = Object.fromEntries(ok.map((f) => [f.id, {
+          temp: p.temp ? Math.round(p.temp[f.id] * 100) / 100 : null,
+          lluvia: p.lluvia ? Math.round(p.lluvia[f.id] * 100) / 100 : null,
+        }]));
+      }
+      verificacion.ponderado = Boolean(p);
+      verificacion.minDias = MIN_DIAS_PONDERAR;
+      registrarPronostico(lugar, fuentes, {
+        [PROMEDIO_SIMPLE]: comoFuente(simple),
+        [PROMEDIO_PONDERADO]: p ? comoFuente(promedio) : null,
+      });
+      // Las observaciones se guardan también al usar la app (además del
+      // temporizador), como mucho cada 6 horas.
+      conCache('registrar-obs', 6 * 3600e3, registrarObservaciones).catch((e) => console.warn('[verificación]', e.message));
+    } catch (e) {
+      console.warn('[verificación]', e.message);
+    }
+  }
+
   return {
     lugar,
     generado: new Date().toISOString(),
@@ -151,7 +194,15 @@ async function pronostico(lugar) {
     acumulados: acumulados(ok, promedio),
     fuentes,
     horario: await pedidoHorario,
+    verificacion,
   };
+}
+
+/** Lo que corre el temporizador: pronóstico del último lugar y observaciones. */
+async function registrar() {
+  const lugar = leerUltimoLugar();
+  if (lugar) await pronostico(lugar);
+  return { lugar: lugar?.nombre ?? null, ...(await registrarObservaciones()) };
 }
 
 // ---------------------------------------------------------------------------
@@ -390,6 +441,9 @@ const servidor = http.createServer(async (req, res) => {
     if (url.pathname.startsWith('/api/')) {
       if (!pedidoPropio(req)) return responderJSON(res, 403, { error: 'Solo la página de PromClim puede usar la API' });
 
+      if (url.pathname === '/api/registrar') {
+        return responderJSON(res, 200, await registrar());
+      }
       if (url.pathname === '/api/resumen') {
         return responderJSON(res, 200, await resumen());
       }

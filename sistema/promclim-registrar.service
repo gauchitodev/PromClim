@@ -1,0 +1,9 @@
+[Unit]
+Description=PromClim: guarda el pronóstico del día y lo que midieron las estaciones
+# Le pide a PromClim por el puerto; si no está corriendo, promclim.socket lo prende.
+Requires=promclim.socket
+After=promclim.socket network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=__NODE__ -e "fetch('http://127.0.0.1:__PUERTO__/api/registrar',{signal:AbortSignal.timeout(120000)}).then(r=>r.text()).then(t=>console.log(t)).catch(e=>{console.error(e.message);process.exit(1)})"

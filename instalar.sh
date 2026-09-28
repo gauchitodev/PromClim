@@ -11,10 +11,11 @@ APPS="$HOME/.local/share/applications"
 ICONOS="$HOME/.local/share/icons/hicolor/scalable/apps"
 
 if [ "${1:-}" = "--quitar" ]; then
-  systemctl --user disable --now promclim.socket promclim.service 2>/dev/null || true
-  rm -f "$UNIDADES/promclim.socket" "$UNIDADES/promclim.service" "$APPS/promclim.desktop" "$ICONOS/promclim.svg"
+  systemctl --user disable --now promclim-registrar.timer promclim.socket promclim.service 2>/dev/null || true
+  rm -f "$UNIDADES/promclim.socket" "$UNIDADES/promclim.service" "$UNIDADES/promclim-registrar.service" \
+        "$UNIDADES/promclim-registrar.timer" "$APPS/promclim.desktop" "$ICONOS/promclim.svg"
   systemctl --user daemon-reload
-  echo "PromClim quitado del sistema (la carpeta queda como está)."
+  echo "PromClim quitado del sistema (la carpeta y los datos de ~/.local/share/promclim quedan como están)."
   exit 0
 fi
 
@@ -39,13 +40,17 @@ mkdir -p "$UNIDADES" "$APPS" "$ICONOS"
 reemplazar() { sed -e "s|__CARPETA__|$CARPETA|g" -e "s|__NODE__|$NODE|g" -e "s|__PUERTO__|$PUERTO|g" "$1"; }
 reemplazar "$CARPETA/sistema/promclim.socket"  > "$UNIDADES/promclim.socket"
 reemplazar "$CARPETA/sistema/promclim.service" > "$UNIDADES/promclim.service"
+reemplazar "$CARPETA/sistema/promclim-registrar.service" > "$UNIDADES/promclim-registrar.service"
+reemplazar "$CARPETA/sistema/promclim-registrar.timer" > "$UNIDADES/promclim-registrar.timer"
 reemplazar "$CARPETA/sistema/promclim.desktop" > "$APPS/promclim.desktop"
 cp "$CARPETA/docs/logo.svg" "$ICONOS/promclim.svg"
 chmod +x "$CARPETA/sistema/abrir.sh"
 
 systemctl --user daemon-reload
 systemctl --user enable --now promclim.socket
+systemctl --user enable --now promclim-registrar.timer
 command -v update-desktop-database >/dev/null && update-desktop-database "$APPS" 2>/dev/null || true
 
 echo "Listo. Abrí \"PromClim\" desde el menú de aplicaciones, o entrá a http://localhost:$PUERTO"
 echo "El servidor arranca solo al abrirlo y se apaga solo después de un rato sin uso."
+echo "Dos veces por día guarda el pronóstico y lo que midieron las estaciones de INUMET (para ver quién acierta)."

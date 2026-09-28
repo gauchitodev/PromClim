@@ -87,6 +87,26 @@ Para cada día: milímetros promedio, probabilidad promedio y cuántas fuentes
 dan lluvia (1 mm o más). También la lluvia acumulada en 3 y 7 días, la del
 promedio y la de cada fuente.
 
+## ¿Quién acierta acá? (solo Uruguay)
+
+PromClim compara lo que pronosticó cada fuente con lo que midió la estación
+automática de INUMET más cercana (hasta 40 km), y muestra el error medio de
+cada una: cuántos grados le erra a la máxima y a la mínima, y en qué
+porcentaje de los días acertó si llovía o no. El promedio también se evalúa,
+para ver si de verdad le gana a las fuentes sueltas.
+
+- Todos los días guarda lo que pronostica cada fuente para los días siguientes.
+  Solo cuentan los pronósticos hechos de 1 a 7 días antes: el del mismo día es
+  demasiado fácil.
+- INUMET publica solo las últimas 72 horas de sus estaciones, así que PromClim
+  guarda las observaciones dos veces por día (un temporizador que instala
+  `./instalar.sh`; si la compu estaba apagada, corre al prenderla).
+- Con **14 días verificados**, el promedio pasa a ser **ponderado**: cada
+  fuente pesa según la inversa de su error en ese lugar. Una fuente con pocos
+  días recibe un peso del medio. Se puede apagar con `"ponderar": false`.
+- Los datos quedan en `~/.local/share/promclim` (dos archivos JSON), nunca
+  en el repo.
+
 ## Análisis con IA
 
 El botón "Analizar" le pasa a una IA todo lo que dijo cada fuente y el
@@ -121,6 +141,7 @@ lib/fuentes/*.js       una fuente por archivo, todas devuelven el mismo formato
 lib/promedio.js        el promedio (media, rango, cuántas fuentes) y la lluvia acumulada
 lib/ia.js              arma el mensaje para la IA y habla con Ollama
 lib/horario.js         hora por hora de Open-Meteo para el detalle de cada día
+lib/verificacion.js    guarda pronósticos y observaciones de INUMET y calcula quién acierta
 lib/util.js            fetch con timeout, caché en memoria y paso de horas a días
 public/                la página (HTML, CSS y JS sin frameworks)
 public/fuentes/        Roboto Flex y Material Symbols recortados, con sus licencias
@@ -138,9 +159,14 @@ gratis.
 ## Limitaciones
 
 - **Que sea un promedio no lo hace más preciso.** Promediar modelos suele
-  andar mejor que elegir uno al azar, pero PromClim todavía no compara lo
-  pronosticado con lo que pasó, así que no sabe qué fuente acierta más en tu
-  zona. Todas pesan lo mismo.
+  andar mejor que elegir uno al azar, pero recién se sabe si en tu lugar le
+  gana a cada fuente después de unas semanas de verificación, y solo en
+  Uruguay (donde hay estaciones de INUMET para comparar). Afuera de Uruguay
+  todas las fuentes pesan lo mismo.
+- **La verificación es chica**: una estación, un lugar, con los días que la
+  compu estuvo prendida. Sirve para ver tendencias en tu zona, no es un
+  estudio científico. La estación mide cada hora, así que la máxima y la
+  mínima reales pueden ser un poco más extremas.
 - **Las fuentes no son del todo independientes**: varias usan por debajo los
   mismos modelos (ECMWF, GFS), así que esos pesan más de lo que parece.
 - **MetSul e INUMET pueden dejar de andar** cualquier día: no tienen API
@@ -155,8 +181,9 @@ gratis.
 npm test
 ```
 
-Cubren el promedio, la lluvia acumulada, el paso de horas a días según la
-zona horaria y los datos que recibe la IA. Las fuentes no tienen tests
+Cubren el promedio (simple y ponderado), la lluvia acumulada, el paso de
+horas a días según la zona horaria, la verificación contra estaciones y los
+datos que recibe la IA. Las fuentes no tienen tests
 automáticos porque dependen de servicios de afuera.
 
 ## Seguridad
@@ -207,6 +234,14 @@ curl -s "$URL" -o public/fuentes/material-symbols-rounded.woff2
 ```
 
 La lista tiene que ir en orden alfabético.
+
+## Cómo se hizo
+
+PromClim es de Franco Feijó, que no es programador: la idea, qué fuentes
+usar, cómo tenía que verse y funcionar, y las pruebas de uso real son suyas.
+**El código lo escribió Claude**, la IA de Anthropic, trabajando con Claude
+Code a partir de lo que Franco iba pidiendo. Si encontrás algo raro en el
+código, abrí un issue igual: se revisa y se arregla.
 
 ## Licencia
 

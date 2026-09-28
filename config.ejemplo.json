@@ -3,6 +3,7 @@
   "host": "127.0.0.1",
   "hostsPermitidos": [],
   "apagarSinUsoMin": 20,
+  "ponderar": true,
   "ia": {
     "url": "http://127.0.0.1:11434",
     "modelo": "gemma3:4b"

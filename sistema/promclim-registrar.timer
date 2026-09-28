@@ -1,0 +1,12 @@
+[Unit]
+Description=PromClim: registro de pronósticos y observaciones dos veces por día
+
+[Timer]
+# INUMET guarda solo 72 horas: dos veces por día alcanza y sobra.
+# Persistent: si la compu estaba apagada, corre al prenderla.
+OnCalendar=*-*-* 08,20:00:00
+RandomizedDelaySec=10min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

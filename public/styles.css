@@ -347,6 +347,12 @@ tr.modelo td { color: var(--sobre-superficie-var); font-size: 13px; }
 tr.total td { font-weight: 600; border-top: 1px solid var(--contorno); }
 td .bajo { color: var(--sobre-superficie-var); }
 
+/* ---------- Verificación ---------- */
+
+.verif-intro { margin: 0 0 8px; }
+.tabla-scroll.sin-margen { padding: 0; }
+.fila-promedio td { font-weight: 600; color: var(--primario); }
+
 /* ---------- Botones ---------- */
 
 .boton-tonal {
