@@ -5,6 +5,8 @@
 Junta el pronóstico de varias fuentes del clima y muestra el promedio día por
 día, con cuánto se separan entre sí y qué dijo cada una.
 
+<p align="center"><img src="docs/captura.png" width="720" alt="PromClim mostrando el pronóstico de Montevideo: promedio de hoy, lista de días y el detalle de un día con gráficos hora por hora y lo que dice cada fuente"></p>
+
 ## Arrancar
 
 Necesitás Node 20 o más nuevo. No hace falta `npm install`: no usa dependencias.
@@ -46,7 +48,9 @@ programas. Si lo necesitás para otra cosa, cambiá `"puerto"` en
 | wttr.in | 3 días, datos de World Weather Online |
 | 7Timer! | 7 días, solo máxima y mínima (modelo GFS) |
 
-**Con clave gratis** (se activan cuando ponés la clave en `config.local.json`):
+**Con clave gratis** (se activan cuando ponés la clave en `config.local.json`).
+**Ojo: estas cinco están escritas según la documentación de cada API pero todavía no
+se probaron con una clave real.** Si alguna falla, abrí un issue:
 
 | Fuente | Plan gratis | Dónde se saca |
 |---|---|---|
@@ -130,6 +134,30 @@ copia un archivo de `lib/fuentes/` y se agrega a la lista `FUENTES` de
 Las respuestas se guardan en memoria un rato (entre 10 minutos y 3 horas,
 según la fuente) para no molestar a las fuentes ni gastar las consultas
 gratis.
+
+## Limitaciones
+
+- **Que sea un promedio no lo hace más preciso.** Promediar modelos suele
+  andar mejor que elegir uno al azar, pero PromClim todavía no compara lo
+  pronosticado con lo que pasó, así que no sabe qué fuente acierta más en tu
+  zona. Todas pesan lo mismo.
+- **Las fuentes no son del todo independientes**: varias usan por debajo los
+  mismos modelos (ECMWF, GFS), así que esos pesan más de lo que parece.
+- **MetSul e INUMET pueden dejar de andar** cualquier día: no tienen API
+  pública y se usan los mismos pedidos que hacen sus páginas.
+- La IA corre en tu compu con un modelo chico: sin placa de video tarda cerca
+  de un minuto y a veces escribe raro. Los números se los da PromClim ya
+  calculados, para que no se equivoque en eso.
+
+## Tests
+
+```bash
+npm test
+```
+
+Cubren el promedio, la lluvia acumulada, el paso de horas a días según la
+zona horaria y los datos que recibe la IA. Las fuentes no tienen tests
+automáticos porque dependen de servicios de afuera.
 
 ## Seguridad
 
