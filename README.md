@@ -47,6 +47,16 @@ dependencias, solo Node 18 o más nuevo.
   usuario. **SMN Argentina** publica un pronóstico por estación en texto, pero
   sin coordenadas; quedó para más adelante.
 
+## Día por día
+
+Cada día se abre al tocarlo y muestra:
+
+- cuántas fuentes dan lluvia, el rango de lluvia, máxima y mínima entre fuentes;
+- dos gráficos hora por hora (temperatura y lluvia), del mejor modelo de
+  Open-Meteo para el lugar; al pasar el dedo o el mouse se leen los valores de
+  cada hora;
+- una tabla con lo que dice cada fuente ese día.
+
 ## Lluvia
 
 Para cada día: milímetros promedio, probabilidad promedio y cuántas fuentes
@@ -85,6 +95,7 @@ server.js              servidor HTTP + /api/buscar, /api/pronostico y /api/anali
 lib/fuentes/*.js       una fuente por archivo, todas devuelven el mismo formato
 lib/promedio.js        el promedio (media, rango, cuántas fuentes) y la lluvia acumulada
 lib/ia.js              arma el mensaje para la IA y habla con Ollama
+lib/horario.js         hora por hora de Open-Meteo para el detalle de cada día
 lib/util.js            fetch con timeout, caché en memoria y paso de horas a días
 public/                la página (HTML, CSS y JS sin frameworks)
 ```

@@ -18,6 +18,7 @@ import { fileURLToPath } from 'node:url';
 import { pedirJSON, conCache } from './lib/util.js';
 import { promedioGeneral, acumulados } from './lib/promedio.js';
 import { analizar } from './lib/ia.js';
+import { horario } from './lib/horario.js';
 import openmeteo from './lib/fuentes/openmeteo.js';
 import inumet from './lib/fuentes/inumet.js';
 import metsul from './lib/fuentes/metsul.js';
@@ -99,6 +100,12 @@ function hoyEn(zona) {
 }
 
 async function pronostico(lugar) {
+  // El hora por hora es un extra para el detalle: si falla, la página sigue sin él.
+  const pedidoHorario = horario(lugar).catch((e) => {
+    console.warn('[horario]', e.message);
+    return null;
+  });
+
   const fuentes = await Promise.all(FUENTES.map(async (f) => {
     const base = { id: f.id, nombre: f.nombre, web: f.web };
     if (!f.aplica(lugar, config)) return { ...base, estado: 'omitida', motivo: f.motivoNoAplica };
@@ -118,6 +125,7 @@ async function pronostico(lugar) {
     promedio,
     acumulados: acumulados(ok, promedio),
     fuentes,
+    horario: await pedidoHorario,
   };
 }
 

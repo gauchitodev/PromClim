@@ -156,7 +156,7 @@ function pintar(lugar, datos) {
   document.title = `${lugar.nombre} · PromClim`;
   pintarHoy(lugar, promedio[0]);
   reiniciarIA();
-  pintarDias(promedio);
+  pintarDias(datos);
   pintarLluvia(acumulados);
   pintarFuentes(fuentes);
   pintarTabla();
@@ -188,21 +188,37 @@ function pintarHoy(lugar, d) {
   );
 }
 
-function pintarDias(promedio) {
-  const dias = promedio.slice(1);
-  const mins = dias.map((d) => d.min?.prom).filter((x) => x != null);
-  const maxs = dias.map((d) => d.max?.prom).filter((x) => x != null);
+function pintarDias({ promedio, fuentes, horario }) {
+  const mins = promedio.map((d) => d.min?.prom).filter((x) => x != null);
+  const maxs = promedio.map((d) => d.max?.prom).filter((x) => x != null);
   const piso = Math.min(...mins, ...maxs), techo = Math.max(...mins, ...maxs);
   const pos = (v) => ((v - piso) / (techo - piso || 1)) * 100;
 
-  $('dias').replaceChildren(...dias.map((d) => {
+  $('dias').replaceChildren(...promedio.map((d, i) => {
     const f = fecha(d.fecha);
     const lo = d.min?.prom ?? d.max?.prom, hi = d.max?.prom ?? d.min?.prom;
     const lluvia = d.lluvia?.prom ?? 0;
     const prob = d.prob ? Math.round(d.prob.prom) : null;
     const hayAgua = lluvia >= 0.1 || prob >= 30;
-    return el('li', { title: d.llueve ? `Llueve para ${consenso(d.llueve)}` : '' },
-      el('span', { class: 'dia' }, DIAS[f.getDay()], el('small', {}, `${f.getDate()}/${f.getMonth() + 1}`)),
+    const panel = el('div', { class: 'detalle-dia', hidden: '' });
+
+    const fila = el('button', {
+      class: 'fila',
+      'aria-expanded': 'false',
+      onclick: () => {
+        const abrir = fila.getAttribute('aria-expanded') !== 'true';
+        fila.setAttribute('aria-expanded', String(abrir));
+        panel.hidden = !abrir;
+        // El detalle se arma recién la primera vez que se abre, ya visible,
+        // para dibujar los gráficos con el ancho real (así el texto no se achica).
+        if (abrir && !panel.childElementCount) {
+          const cs = getComputedStyle(panel);
+          const ancho = panel.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight);
+          panel.append(...detalleDia(d, fuentes, horario?.[d.fecha], ancho));
+        }
+      },
+    },
+      el('span', { class: 'dia' }, i === 0 ? 'Hoy' : DIAS[f.getDay()], el('small', {}, `${f.getDate()}/${f.getMonth() + 1}`)),
       el('span', { class: `agua${hayAgua ? '' : ' seco'}` },
         icono('water_drop'),
         el('span', {}, hayAgua ? mm(lluvia) : '—',
@@ -211,8 +227,149 @@ function pintarDias(promedio) {
       el('div', { class: 'barra-temp' },
         el('span', { style: `left:${pos(lo)}%;right:${100 - pos(hi)}%` })),
       el('span', { class: 'max' }, grados(d.max?.prom)),
+      el('span', { class: 'icono flecha', 'aria-hidden': 'true' }, 'expand_more'),
     );
+    return el('li', {}, fila, panel);
   }));
+}
+
+// ---------------------------------------------------------------------------
+// Detalle de un día
+// ---------------------------------------------------------------------------
+
+const rango = (c, fmt) => (c.n > 1 && c.min !== c.max ? `${fmt(c.min)} a ${fmt(c.max)}` : fmt(c.prom));
+
+function detalleDia(d, fuentes, horas, ancho) {
+  const partes = [];
+
+  partes.push(el('div', { class: 'chips' },
+    d.llueve && el('span', { class: 'chip' }, icono('how_to_vote'), `Llueve para ${consenso(d.llueve)}`),
+    d.lluvia && el('span', { class: 'chip' }, icono('water_drop'), `Lluvia: ${rango(d.lluvia, mm)}`),
+    d.prob && el('span', { class: 'chip' }, icono('umbrella'), `Probabilidad ${Math.round(d.prob.prom)} %`),
+    d.viento && el('span', { class: 'chip' }, icono('air'), `Viento hasta ${Math.round(d.viento.prom)} km/h`),
+    d.max && el('span', { class: 'chip' }, icono('thermostat'), `Máxima: ${rango(d.max, grados)}`),
+    d.min && el('span', { class: 'chip' }, icono('ac_unit'), `Mínima: ${rango(d.min, grados)}`),
+  ));
+
+  if (horas && horas.length >= 12) partes.push(...graficosHorarios(horas, ancho));
+
+  const filas = fuentes
+    .filter((f) => f.estado === 'ok')
+    .map((f) => ({ f, x: f.dias.find((x) => x.fecha === d.fecha) }))
+    .filter(({ x }) => x && [x.max, x.min, x.lluvia, x.prob].some((v) => v !== null));
+  if (filas.length) {
+    const guion = el('span', { class: 'bajo' }, '–');
+    partes.push(el('h4', {}, 'Qué dice cada fuente'));
+    partes.push(el('table', { class: 'tabla-dia' },
+      el('thead', {}, el('tr', {}, el('th', {}, 'Fuente'), el('th', {}, 'Máx'), el('th', {}, 'Mín'),
+        el('th', {}, 'Lluvia'), el('th', {}, 'Prob.'))),
+      el('tbody', {}, filas.map(({ f, x }) => el('tr', {},
+        el('td', {}, f.nombre, f.nota ? el('small', {}, f.nota) : ''),
+        el('td', {}, x.max !== null ? grados(x.max) : guion.cloneNode(true)),
+        el('td', {}, x.min !== null ? grados(x.min) : guion.cloneNode(true)),
+        el('td', {}, x.lluvia !== null ? mm(x.lluvia) : guion.cloneNode(true)),
+        el('td', {}, x.prob !== null ? `${Math.round(x.prob)} %` : guion.cloneNode(true)),
+      ))),
+    ));
+  }
+  return partes;
+}
+
+// ---------------------------------------------------------------------------
+// Gráficos hora por hora: temperatura y lluvia en dos gráficos separados que
+// comparten el eje de las horas (cada uno con su escala, nunca dos escalas
+// en el mismo gráfico). Al pasar el dedo o el mouse, una línea marca la hora
+// en los dos y arriba se leen los valores.
+// ---------------------------------------------------------------------------
+
+const NS = 'http://www.w3.org/2000/svg';
+function svg(tag, attrs = {}, ...hijos) {
+  const e = document.createElementNS(NS, tag);
+  for (const [k, v] of Object.entries(attrs)) e.setAttribute(k, v);
+  e.append(...hijos);
+  return e;
+}
+
+function graficosHorarios(horas, anchoPantalla) {
+  const W = Math.round(Math.max(280, anchoPantalla || 600)), IZQ = 34, DER = 8;
+  const paso = (W - IZQ - DER) / 24;
+  const xDe = (h) => IZQ + paso * (h + 0.5);
+
+  // Temperatura: línea.
+  const temps = horas.map((h) => h.temp).filter((t) => t !== null);
+  const tMin = Math.floor(Math.min(...temps)) - 1, tMax = Math.ceil(Math.max(...temps)) + 1;
+  const HT = 120, ARR = 8, ABA = 8;
+  const yT = (t) => ARR + (1 - (t - tMin) / (tMax - tMin || 1)) * (HT - ARR - ABA);
+  const graficoT = svg('svg', { viewBox: `0 0 ${W} ${HT}`, class: 'grafico', role: 'img',
+    'aria-label': `Temperatura por hora, entre ${Math.round(Math.min(...temps))}° y ${Math.round(Math.max(...temps))}°` });
+  for (const t of [tMin + 1, Math.round((tMin + tMax) / 2), tMax - 1]) {
+    graficoT.append(
+      svg('line', { x1: IZQ, x2: W - DER, y1: yT(t), y2: yT(t), class: 'grilla' }),
+      svg('text', { x: IZQ - 6, y: yT(t) + 4, class: 'eje', 'text-anchor': 'end' }, `${t}°`));
+  }
+  const puntos = horas.filter((h) => h.temp !== null).map((h) => `${xDe(h.hora).toFixed(1)},${yT(h.temp).toFixed(1)}`);
+  graficoT.append(svg('polyline', { points: puntos.join(' '), class: 'linea-temp' }));
+
+  // Lluvia: barras desde la base, puntas de arriba redondeadas.
+  const HL = 84, BASE = HL - 20;
+  const lluvias = horas.map((h) => h.lluvia ?? 0);
+  const lMax = Math.max(2, ...lluvias);
+  const graficoL = svg('svg', { viewBox: `0 0 ${W} ${HL}`, class: 'grafico', role: 'img',
+    'aria-label': `Lluvia por hora, en total ${mm(Math.round(lluvias.reduce((s, x) => s + x, 0) * 10) / 10)}` });
+  graficoL.append(
+    svg('line', { x1: IZQ, x2: W - DER, y1: BASE, y2: BASE, class: 'base' }),
+    svg('text', { x: IZQ - 6, y: 12, class: 'eje', 'text-anchor': 'end' }, `${lMax < 10 ? lMax.toFixed(0) : Math.round(lMax)}`),
+    svg('text', { x: IZQ - 6, y: 24, class: 'eje', 'text-anchor': 'end' }, 'mm'));
+  for (const h of horas) {
+    const v = h.lluvia ?? 0;
+    if (v <= 0) continue;
+    const alto = Math.max(2, (v / lMax) * (BASE - 6));
+    const x = xDe(h.hora) - paso / 2 + 1, w = paso - 2, y = BASE - alto, r = Math.min(4, w / 2, alto);
+    graficoL.append(svg('path', { class: 'barra-agua',
+      d: `M${x},${BASE} V${y + r} Q${x},${y} ${x + r},${y} H${x + w - r} Q${x + w},${y} ${x + w},${y + r} V${BASE} Z` }));
+  }
+  for (const hh of [0, 6, 12, 18]) {
+    graficoL.append(svg('text', { x: xDe(hh), y: HL - 4, class: 'eje', 'text-anchor': 'middle' }, `${hh} h`));
+  }
+
+  // Lectura al pasar el mouse o el dedo.
+  const lectura = el('p', { class: 'lectura' }, 'Pasá el dedo o el mouse por el gráfico para ver cada hora.');
+  const cruces = [graficoT, graficoL].map((g) => {
+    const c = svg('line', { class: 'cruz', y1: 0, y2: g === graficoT ? HT : BASE, visibility: 'hidden' });
+    g.append(c);
+    return c;
+  });
+  const mostrar = (evento, g) => {
+    const caja = g.getBoundingClientRect();
+    const x = ((evento.clientX - caja.left) / caja.width) * W;
+    const i = Math.max(0, Math.min(horas.length - 1, Math.floor((x - IZQ) / paso)));
+    const h = horas[i];
+    for (const c of cruces) {
+      c.setAttribute('x1', xDe(h.hora));
+      c.setAttribute('x2', xDe(h.hora));
+      c.setAttribute('visibility', 'visible');
+    }
+    lectura.replaceChildren(
+      el('strong', {}, `${String(h.hora).padStart(2, '0')}:00`),
+      ` · ${grados(h.temp)} · ${mm(h.lluvia ?? 0)}`,
+      h.prob !== null ? ` · ${h.prob} % de lluvia` : '',
+      h.viento !== null ? ` · viento ${Math.round(h.viento)} km/h` : '');
+  };
+  for (const g of [graficoT, graficoL]) {
+    g.addEventListener('pointermove', (e) => mostrar(e, g));
+    g.addEventListener('pointerdown', (e) => mostrar(e, g));
+    g.addEventListener('pointerleave', () => cruces.forEach((c) => c.setAttribute('visibility', 'hidden')));
+  }
+
+  return [
+    el('h4', {}, 'Hora por hora'),
+    lectura,
+    el('p', { class: 'titulo-grafico' }, 'Temperatura'),
+    graficoT,
+    el('p', { class: 'titulo-grafico' }, 'Lluvia'),
+    graficoL,
+    el('p', { class: 'nota-grafico' }, 'Hora por hora según el mejor modelo de Open-Meteo para este lugar, no el promedio.'),
+  ];
 }
 
 function pintarLluvia(ac) {
