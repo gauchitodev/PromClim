@@ -59,9 +59,10 @@ Las respuestas se guardan en memoria un rato (Open-Meteo 30 min, MetSul 1 h,
 INUMET 10 min, AccuWeather 3 h) para no molestar a las fuentes ni gastar las
 consultas gratis.
 
-## Ojo si se hace pública
+## Para uso personal
 
-MetSul e INUMET no tienen API pública: se usan los mismos pedidos que hacen
-sus páginas. Sirve para uso personal, pero antes de abrir la app al público
-hay que revisar sus condiciones de uso. AccuWeather y Foreca además piden
-mostrar su nombre o logo al lado de sus datos.
+PromClim está pensado para que cada uno lo corra en su propia compu, con sus
+propias claves de AccuWeather y Foreca. No es para montarlo como página
+pública: MetSul e INUMET no tienen API pública (se usan los mismos pedidos que
+hacen sus páginas) y los planes gratis de AccuWeather y Foreca tienen límites
+por clave. La app muestra de qué fuente sale cada dato, con enlace a cada una.
