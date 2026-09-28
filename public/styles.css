@@ -1,5 +1,23 @@
 /* Material Design 3, a mano: tokens de color de un esquema tonal azul. */
 
+/* Fuentes incluidas en el repo (licencias en public/fuentes/), así la página
+   no le pide nada a Google. Los íconos están recortados a los que se usan:
+   para sumar uno hay que regenerar el archivo (ver README). */
+@font-face {
+  font-family: 'Roboto Flex';
+  font-style: normal;
+  font-weight: 300 700;
+  font-display: swap;
+  src: url(fuentes/roboto-flex-latin.woff2) format('woff2');
+}
+@font-face {
+  font-family: 'Material Symbols Rounded';
+  font-style: normal;
+  font-weight: 400;
+  font-display: block;
+  src: url(fuentes/material-symbols-rounded.woff2) format('woff2');
+}
+
 :root {
   --primario: #3b5ba9;
   --sobre-primario: #ffffff;

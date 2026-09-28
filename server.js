@@ -1,5 +1,5 @@
 /**
- * PromClim — servidor. Sin dependencias: Node >= 18.
+ * PromClim — servidor. Sin dependencias: Node >= 20.
  *
  *   GET /api/buscar?q=Trinidad            → lugares (geocoding de Open-Meteo)
  *   GET /api/pronostico?lat=&lon=&nombre=&detalle=&pais=&zona=
@@ -45,9 +45,26 @@ const FUENTES = [
 const RAIZ = path.dirname(fileURLToPath(import.meta.url));
 const PUBLICO = path.join(RAIZ, 'public');
 
+const [MAYOR] = process.versions.node.split('.').map(Number);
+if (MAYOR < 20) {
+  console.error(`PromClim necesita Node 20 o más nuevo (tenés ${process.versions.node}).`);
+  process.exit(1);
+}
+
 // config.local.json no se sube a git: ahí van las claves de las APIs.
-const archivoConfig = path.join(RAIZ, 'config.local.json');
-const config = existsSync(archivoConfig) ? JSON.parse(readFileSync(archivoConfig, 'utf8')) : {};
+function leerConfig() {
+  const archivo = path.join(RAIZ, 'config.local.json');
+  if (!existsSync(archivo)) return {};
+  try {
+    const c = JSON.parse(readFileSync(archivo, 'utf8'));
+    if (!c || typeof c !== 'object' || Array.isArray(c)) throw new Error('tiene que ser un objeto { ... }');
+    return c;
+  } catch (e) {
+    console.error(`config.local.json está mal escrito: ${e.message}`);
+    process.exit(1);
+  }
+}
+const config = leerConfig();
 const PUERTO = Number(process.env.PORT) || config.puerto || 8080;
 const HOST = process.env.HOST || config.host || '127.0.0.1';
 
@@ -62,7 +79,7 @@ const sinTildes = (s) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase(
  * departamento/provincia/país.
  */
 async function buscar(q) {
-  const palabras = q.replace(/,/g, ' ').trim().split(/\s+/).filter(Boolean);
+  const palabras = q.slice(0, 100).replace(/,/g, ' ').trim().split(/\s+/).filter(Boolean);
   if (palabras.join(' ').length < 2) return [];
   return conCache(`buscar:${sinTildes(palabras.join(' '))}`, 86_400e3, async () => {
     const minimo = Math.max(1, palabras.length - 3);
@@ -131,14 +148,61 @@ async function pronostico(lugar) {
 
 // ---------------------------------------------------------------------------
 
+// ---------------------------------------------------------------------------
+// Seguridad
+//
+// PromClim corre en la propia compu y no tiene usuarios ni contraseña. Estas
+// defensas son para que nadie más lo use por atrás, gastando las claves de las
+// APIs o el procesador con la IA: ni otra página abierta en el navegador, ni
+// (salvo que se configure) otra compu de la red.
+// ---------------------------------------------------------------------------
+
+const ES_LOCAL = ['127.0.0.1', 'localhost', '::1'].includes(HOST);
+
+// Nombres con los que se puede llamar al servidor (cabecera Host). Frena el
+// "DNS rebinding": una página maliciosa que hace apuntar su dominio a
+// 127.0.0.1 para hablarle a PromClim como si fuera ella misma.
+const HOSTS_PERMITIDOS = new Set([
+  `localhost:${PUERTO}`, `127.0.0.1:${PUERTO}`, `[::1]:${PUERTO}`,
+  ...(Array.isArray(config.hostsPermitidos) ? config.hostsPermitidos : []).map((h) => String(h).toLowerCase()),
+]);
+
+/** Las /api solo contestan a la propia página, no a otras abiertas en el navegador. */
+function pedidoPropio(req) {
+  const sitio = req.headers['sec-fetch-site'];
+  if (sitio && sitio !== 'same-origin' && sitio !== 'none') return false;
+  const origen = req.headers.origin;
+  if (origen && origen !== `http://${req.headers.host}`) return false;
+  return true;
+}
+
+const CABECERAS = {
+  // La página solo carga cosas de PromClim mismo: nada de scripts, estilos ni
+  // fuentes de afuera, y no se puede meter adentro de otra página.
+  'Content-Security-Policy': [
+    "default-src 'none'", "script-src 'self'", "style-src 'self'", "font-src 'self'",
+    "img-src 'self' data:", "connect-src 'self'", "base-uri 'none'", "form-action 'none'",
+    "frame-ancestors 'none'",
+  ].join('; '),
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Referrer-Policy': 'no-referrer',
+  'Permissions-Policy': 'geolocation=(self), camera=(), microphone=(), payment=(), usb=()',
+  'Cross-Origin-Opener-Policy': 'same-origin',
+  'Cross-Origin-Resource-Policy': 'same-origin',
+};
+
+// ---------------------------------------------------------------------------
+
 const TIPOS = {
   '.html': 'text/html; charset=utf-8',
   '.js': 'text/javascript; charset=utf-8',
   '.css': 'text/css; charset=utf-8',
   '.svg': 'image/svg+xml',
-  '.json': 'application/json',
   '.png': 'image/png',
   '.ico': 'image/x-icon',
+  '.woff2': 'font/woff2',
+  '.txt': 'text/plain; charset=utf-8',
 };
 
 function responderJSON(res, codigo, datos) {
@@ -146,16 +210,43 @@ function responderJSON(res, codigo, datos) {
   res.end(JSON.stringify(datos));
 }
 
+function responderTexto(res, codigo, texto) {
+  res.writeHead(codigo, { 'Content-Type': 'text/plain; charset=utf-8' });
+  res.end(texto);
+}
+
 async function servirArchivo(res, ruta) {
-  const archivo = path.normalize(path.join(PUBLICO, ruta === '/' ? 'index.html' : ruta));
-  if (!archivo.startsWith(PUBLICO + path.sep)) return responderJSON(res, 403, { error: 'Prohibido' });
+  let decodificada;
+  try {
+    decodificada = decodeURIComponent(ruta);
+  } catch {
+    return responderTexto(res, 400, 'Ruta inválida');
+  }
+  if (decodificada.includes('\0')) return responderTexto(res, 400, 'Ruta inválida');
+  const archivo = path.normalize(path.join(PUBLICO, decodificada === '/' ? 'index.html' : decodificada));
+  // Nada fuera de public/, ni archivos ocultos.
+  if (!archivo.startsWith(PUBLICO + path.sep) || path.basename(archivo).startsWith('.')) {
+    return responderTexto(res, 404, 'No encontrado');
+  }
+  const tipo = TIPOS[path.extname(archivo)];
+  if (!tipo) return responderTexto(res, 404, 'No encontrado');
   try {
     const cuerpo = await readFile(archivo);
-    res.writeHead(200, { 'Content-Type': TIPOS[path.extname(archivo)] || 'application/octet-stream' });
+    res.writeHead(200, { 'Content-Type': tipo, 'Cache-Control': 'no-cache' });
     res.end(cuerpo);
   } catch {
-    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
-    res.end('No encontrado');
+    responderTexto(res, 404, 'No encontrado');
+  }
+}
+
+/** Zona horaria válida para Intl, o UTC. */
+function zonaValida(z) {
+  if (!z || z.length > 64) return 'UTC';
+  try {
+    new Intl.DateTimeFormat('en', { timeZone: z });
+    return z;
+  } catch {
+    return 'UTC';
   }
 }
 
@@ -163,19 +254,22 @@ function leerLugar(p) {
   const lat = Number(p.get('lat')), lon = Number(p.get('lon'));
   if (!p.get('lat') || !p.get('lon') || !Number.isFinite(lat) || !Number.isFinite(lon)
       || Math.abs(lat) > 90 || Math.abs(lon) > 180) return null;
+  const pais = (p.get('pais') || '').toUpperCase();
   return {
     lat, lon,
     nombre: (p.get('nombre') || '').slice(0, 80),
     detalle: (p.get('detalle') || '').slice(0, 120),
-    pais: (p.get('pais') || '').toUpperCase().slice(0, 2) || null,
-    zona: p.get('zona') || 'UTC',
+    pais: /^[A-Z]{2}$/.test(pais) ? pais : null,
+    zona: zonaValida(p.get('zona')),
   };
 }
 
 // El análisis tarda: se guarda 30 min por lugar para no repetirlo al recargar.
 const analisisHechos = new Map();
+// La IA usa todo el procesador: un análisis por vez.
+let analisisEnCurso = false;
 
-async function responderAnalisis(res, datos) {
+async function responderAnalisis(req, res, datos) {
   if (!datos.promedio.length) return responderJSON(res, 422, { error: 'No hay datos para analizar' });
   const clave = `${datos.lugar.lat.toFixed(2)},${datos.lugar.lon.toFixed(2)}`;
   const previo = analisisHechos.get(clave);
@@ -184,46 +278,91 @@ async function responderAnalisis(res, datos) {
     res.writeHead(200, cabecera);
     return res.end(previo.texto);
   }
+  if (analisisEnCurso) {
+    return responderJSON(res, 429, { error: 'Ya hay un análisis en curso. Esperá a que termine.', codigo: 'ocupado' });
+  }
 
+  // Si se cierra la página a mitad de camino, se corta la IA.
+  const cancelar = new AbortController();
+  res.on('close', () => { if (!res.writableFinished) cancelar.abort(); });
+
+  analisisEnCurso = true;
   let texto = '';
   try {
     await analizar(datos, config, (pedazo) => {
       if (!res.headersSent) res.writeHead(200, cabecera);
       texto += pedazo;
       res.write(pedazo);
-    });
+    }, cancelar.signal);
   } catch (e) {
-    if (res.headersSent) return res.end(`\n\n[Se cortó el análisis: ${e.message}]`);
-    return responderJSON(res, 503, { error: e.message, codigo: e.codigo || 'ia', modelo: e.modelo });
+    if (cancelar.signal.aborted) return res.end();
+    const mensaje = e.name === 'TimeoutError' ? 'La IA tardó demasiado' : e.message;
+    if (res.headersSent) return res.end(`\n\n[Se cortó el análisis: ${mensaje}]`);
+    return responderJSON(res, 503, { error: mensaje, codigo: e.codigo || 'ia', modelo: e.modelo });
+  } finally {
+    analisisEnCurso = false;
   }
   if (!res.headersSent) res.writeHead(200, cabecera);
-  if (texto) analisisHechos.set(clave, { t: Date.now(), texto });
+  if (texto) {
+    analisisHechos.set(clave, { t: Date.now(), texto });
+    if (analisisHechos.size > 100) analisisHechos.delete(analisisHechos.keys().next().value);
+  }
   res.end();
 }
 
 const servidor = http.createServer(async (req, res) => {
-  const url = new URL(req.url, 'http://x');
+  for (const [k, v] of Object.entries(CABECERAS)) res.setHeader(k, v);
+
+  if (!HOSTS_PERMITIDOS.has((req.headers.host || '').toLowerCase())) {
+    return responderTexto(res, 421, 'Host no permitido. Si entrás desde otra compu, agregalo a "hostsPermitidos" en config.local.json.');
+  }
+  if (req.method !== 'GET' && req.method !== 'HEAD') {
+    res.setHeader('Allow', 'GET, HEAD');
+    return responderTexto(res, 405, 'Método no permitido');
+  }
+
+  let url;
   try {
-    if (url.pathname === '/api/buscar') {
-      return responderJSON(res, 200, await buscar(url.searchParams.get('q') || ''));
+    url = new URL(req.url, 'http://x');
+  } catch {
+    return responderTexto(res, 400, 'Pedido inválido');
+  }
+
+  try {
+    if (url.pathname.startsWith('/api/')) {
+      if (!pedidoPropio(req)) return responderJSON(res, 403, { error: 'Solo la página de PromClim puede usar la API' });
+
+      if (url.pathname === '/api/buscar') {
+        return responderJSON(res, 200, await buscar(url.searchParams.get('q') || ''));
+      }
+      if (url.pathname === '/api/pronostico' || url.pathname === '/api/analisis') {
+        const lugar = leerLugar(url.searchParams);
+        if (!lugar) return responderJSON(res, 400, { error: 'Coordenadas inválidas' });
+        const datos = await pronostico(lugar);
+        if (url.pathname === '/api/pronostico') return responderJSON(res, 200, datos);
+        return responderAnalisis(req, res, datos);
+      }
+      return responderJSON(res, 404, { error: 'No existe' });
     }
-    if (url.pathname === '/api/pronostico' || url.pathname === '/api/analisis') {
-      const lugar = leerLugar(url.searchParams);
-      if (!lugar) return responderJSON(res, 400, { error: 'Coordenadas inválidas' });
-      const datos = await pronostico(lugar);
-      if (url.pathname === '/api/pronostico') return responderJSON(res, 200, datos);
-      return responderAnalisis(res, datos);
-    }
-    if (req.method !== 'GET') return responderJSON(res, 405, { error: 'Método no permitido' });
-    return servirArchivo(res, decodeURIComponent(url.pathname));
+    return servirArchivo(res, url.pathname);
   } catch (e) {
+    // El detalle va a la consola, no a la página.
     console.error(e);
-    return responderJSON(res, 502, { error: e.message });
+    if (res.headersSent) return res.end();
+    return responderJSON(res, 500, { error: 'Error interno. Mirá la consola donde corre PromClim.' });
   }
 });
 
 servidor.listen(PUERTO, HOST, () => {
-  const conClave = FUENTES.filter((f) => f.aplica({ lat: 0, lon: 0, pais: 'UY' }, config)).map((f) => f.nombre);
-  console.log(`PromClim en http://${HOST === '0.0.0.0' ? 'localhost' : HOST}:${PUERTO}`);
-  console.log(`Fuentes activas: ${conClave.join(', ')}`);
+  const activas = FUENTES.filter((f) => f.aplica({ lat: 0, lon: 0, pais: 'UY' }, config)).map((f) => f.nombre);
+  console.log(`PromClim en http://${ES_LOCAL ? 'localhost' : HOST}:${PUERTO}`);
+  console.log(`Fuentes activas: ${activas.join(', ')}`);
+  if (!ES_LOCAL) {
+    console.warn([
+      '',
+      `OJO: PromClim está escuchando en ${HOST}, así que otras compus de la red pueden llegar.`,
+      'No tiene usuario ni contraseña: quien entre usa tus claves de las APIs y tu IA.',
+      'Solo va a contestar a los nombres de "hostsPermitidos" en config.local.json.',
+    ].join('\n'));
+  }
 });

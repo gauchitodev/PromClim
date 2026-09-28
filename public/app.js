@@ -12,6 +12,8 @@ function el(tag, attrs = {}, ...hijos) {
   const e = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
     if (k === 'class') e.className = v;
+    // Por CSSOM y no como atributo: la política de seguridad (CSP) bloquea style="…".
+    else if (k === 'style') e.style.cssText = v;
     else if (k.startsWith('on')) e.addEventListener(k.slice(2), v);
     else e.setAttribute(k, v);
   }
@@ -538,6 +540,7 @@ function mostrarErrorIA(e) {
       'Ollama está andando, pero falta bajar el modelo. En una terminal:',
       `ollama pull ${e.modelo || 'gemma3:4b'}`,
     ],
+    ocupado: ['Ya hay un análisis en curso (quizás en otra pestaña). Esperá a que termine y probá de nuevo.'],
   }[e.codigo] || [`No se pudo hacer el análisis: ${e.error || 'error desconocido'}`];
   caja.replaceChildren(...pasos.map((p, i) => el(i && /^(sudo|ollama|https)/.test(p) ? 'pre' : 'p', {}, p)));
   $('analizar').disabled = false;

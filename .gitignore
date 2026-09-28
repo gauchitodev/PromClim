@@ -1,3 +1,5 @@
 node_modules/
 config.local.json
+*.local.json
+.env
 *.log

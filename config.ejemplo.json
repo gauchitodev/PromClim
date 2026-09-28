@@ -1,13 +1,24 @@
 {
   "puerto": 8080,
   "host": "127.0.0.1",
+  "hostsPermitidos": [],
   "ia": {
     "url": "http://127.0.0.1:11434",
     "modelo": "gemma3:4b"
   },
-  "accuweather": { "clave": "" },
-  "foreca": { "clave": "" },
-  "openweathermap": { "clave": "" },
-  "weatherapi": { "clave": "" },
-  "visualcrossing": { "clave": "" }
+  "accuweather": {
+    "clave": ""
+  },
+  "foreca": {
+    "clave": ""
+  },
+  "openweathermap": {
+    "clave": ""
+  },
+  "weatherapi": {
+    "clave": ""
+  },
+  "visualcrossing": {
+    "clave": ""
+  }
 }

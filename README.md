@@ -10,7 +10,7 @@ npm start
 ```
 
 Después abrí <http://localhost:8080>. No hace falta `npm install`: no usa
-dependencias, solo Node 18 o más nuevo.
+dependencias, solo Node 20 o más nuevo.
 
 ## Fuentes
 
@@ -98,6 +98,7 @@ lib/ia.js              arma el mensaje para la IA y habla con Ollama
 lib/horario.js         hora por hora de Open-Meteo para el detalle de cada día
 lib/util.js            fetch con timeout, caché en memoria y paso de horas a días
 public/                la página (HTML, CSS y JS sin frameworks)
+public/fuentes/        Roboto Flex y Material Symbols recortados, con sus licencias
 ```
 
 Cada fuente devuelve una lista de días `{ fecha, max, min, lluvia, prob,
@@ -109,6 +110,33 @@ Las respuestas se guardan en memoria un rato (entre 10 minutos y 3 horas,
 según la fuente) para no molestar a las fuentes ni gastar las consultas
 gratis.
 
+## Seguridad
+
+PromClim no tiene usuarios ni contraseña, así que está armado para que solo lo
+uses vos, desde tu compu:
+
+- **Escucha solo en tu compu** (`127.0.0.1`). Otras compus de la red no llegan.
+- **Otras páginas no lo pueden usar.** Si tenés abierta otra página en el
+  navegador, no puede pedirle datos ni análisis a PromClim por atrás (se
+  rechazan los pedidos que no vienen de la propia página, y los que llegan con
+  otro nombre de servidor, para frenar el *DNS rebinding*).
+- **La página no carga nada de afuera.** Las fuentes tipográficas vienen en el
+  repo y la política de seguridad (CSP) no deja cargar scripts, estilos ni
+  fuentes de otros sitios.
+- **Las claves no salen de tu compu**: viven en `config.local.json` (fuera de
+  git), las usa solo el servidor, y los mensajes de error nunca muestran las
+  URLs que las llevan.
+- **Límites**: un análisis de IA por vez (se corta si cerrás la página y a los
+  5 minutos), respuestas de las fuentes de hasta 5 MB y memoria de caché con tope.
+
+Si querés entrar desde el celular o desde otra compu de tu casa, poné en
+`config.local.json` `"host": "0.0.0.0"` y en `"hostsPermitidos"` la dirección
+con la que vas a entrar (por ejemplo `"192.168.1.20:8080"`). Tené en cuenta
+que cualquiera en esa red va a poder usar tus claves y tu IA. No lo expongas a
+internet.
+
+Para reportar un problema de seguridad, mirá [SECURITY.md](SECURITY.md).
+
 ## Para uso personal
 
 PromClim está pensado para que cada uno lo corra en su propia compu, con sus
@@ -116,3 +144,17 @@ propias claves. No es para montarlo como página
 pública: MetSul e INUMET no tienen API pública (se usan los mismos pedidos que
 hacen sus páginas) y los planes gratis de las APIs con clave tienen límites
 por clave. La app muestra de qué fuente sale cada dato, con enlace a cada una.
+
+## Íconos
+
+Los íconos (Material Symbols) están recortados a los que usa la página, para
+que pese 5 KB. Para sumar uno, agregalo a la lista y volvé a bajar el archivo:
+
+```bash
+ICONOS="ac_unit,air,auto_awesome,check_circle,cloud_off,error,expand_more,how_to_vote,location_on,my_location,partly_cloudy_day,remove_circle,search,table_chart,thermostat,travel_explore,umbrella,water_drop"
+UA="Mozilla/5.0 (X11; Linux x86_64) Chrome/130.0"
+URL=$(curl -s -A "$UA" "https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0..1,0&icon_names=$ICONOS" | grep -oE 'https://fonts.gstatic.com/[^)]+')
+curl -s "$URL" -o public/fuentes/material-symbols-rounded.woff2
+```
+
+La lista tiene que ir en orden alfabético.
