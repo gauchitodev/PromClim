@@ -1,3 +1,5 @@
+<p align="center"><img src="docs/logo.svg" width="96" height="96" alt="Logo de PromClim: tres líneas que se juntan en una gota"></p>
+
 # PromClim
 
 Junta el pronóstico de varias fuentes del clima y muestra el promedio día por

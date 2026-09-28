@@ -94,8 +94,12 @@ body {
   max-width: 760px;
   margin: 0 auto;
 }
-.barra .icono { color: var(--primario); font-variation-settings: 'FILL' 1; }
-.barra h1 { font-size: 22px; font-weight: 500; margin: 0; }
+.barra .logo { flex: none; }
+.logo .trazo { stroke: var(--primario); }
+.logo .relleno { fill: var(--primario); }
+.logo .acento { fill: var(--calor); }
+.barra h1 { font-size: 22px; font-weight: 400; margin: 0; color: var(--primario); letter-spacing: -.01em; }
+.barra h1 b { font-weight: 700; }
 
 main { max-width: 760px; margin: 0 auto; padding: 8px 16px 48px; }
 
