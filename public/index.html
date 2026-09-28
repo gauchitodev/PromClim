@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>PromClim</title>
+  <meta name="description" content="El pronóstico de varias fuentes, promediado.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Roboto+Flex:opsz,wght@8..144,300..700&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0..1,0&display=block" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header class="barra">
+    <span class="icono">partly_cloudy_day</span>
+    <h1>PromClim</h1>
+  </header>
+
+  <main>
+    <div class="buscador" role="search">
+      <span class="icono">search</span>
+      <input id="buscar" type="search" placeholder="Buscar ciudad o pueblo" autocomplete="off"
+             aria-label="Buscar lugar" aria-controls="resultados" aria-expanded="false">
+      <button id="ubicacion" class="boton-icono" title="Usar mi ubicación" aria-label="Usar mi ubicación">
+        <span class="icono">my_location</span>
+      </button>
+      <ul id="resultados" class="resultados" role="listbox" hidden></ul>
+    </div>
+
+    <section id="vacio" class="vacio">
+      <span class="icono grande">travel_explore</span>
+      <p>Buscá un lugar para ver el pronóstico promedio de todas las fuentes.</p>
+    </section>
+
+    <section id="cargando" class="vacio" hidden>
+      <div class="girando"></div>
+      <p>Consultando fuentes…</p>
+    </section>
+
+    <section id="contenido" hidden>
+      <article class="tarjeta hoy" id="hoy"></article>
+
+      <h2>Próximos días</h2>
+      <ul class="lista-dias" id="dias"></ul>
+
+      <h2>Fuentes</h2>
+      <div class="chips" id="fuentes"></div>
+
+      <details class="tarjeta detalle">
+        <summary><span class="icono">table_chart</span>Qué dice cada fuente</summary>
+        <div class="tabla-scroll" id="tabla"></div>
+      </details>
+    </section>
+  </main>
+
+  <script src="app.js" type="module"></script>
+</body>
+</html>

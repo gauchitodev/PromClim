@@ -1,0 +1,14 @@
+{
+  "name": "promclim",
+  "version": "0.1.0",
+  "description": "Junta el pronóstico de varias fuentes del clima y muestra el promedio",
+  "private": true,
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
