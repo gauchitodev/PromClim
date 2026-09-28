@@ -2,6 +2,7 @@
   "name": "promclim",
   "version": "0.1.0",
   "description": "Junta el pronóstico de varias fuentes del clima y muestra el promedio",
+  "license": "MIT",
   "private": true,
   "type": "module",
   "main": "server.js",

@@ -158,3 +158,10 @@ curl -s "$URL" -o public/fuentes/material-symbols-rounded.woff2
 ```
 
 La lista tiene que ir en orden alfabético.
+
+## Licencia
+
+El código es [MIT](LICENSE) © 2026 Franco Feijó. Las fuentes tipográficas de
+`public/fuentes/` tienen sus propias licencias: Roboto Flex (SIL OFL 1.1) y
+Material Symbols (Apache 2.0), con los textos en esa misma carpeta. Los datos
+del clima son de cada fuente y se rigen por sus condiciones.
