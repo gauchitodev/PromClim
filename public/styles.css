@@ -288,6 +288,10 @@ h2 {
 .grafico .eje { fill: var(--sobre-superficie-var); font-size: 11px; font-family: inherit; }
 .grafico .linea-temp { fill: none; stroke: var(--calor); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
 .grafico .barra-agua { fill: var(--frio); }
+.grafico .linea-pron { fill: none; stroke: var(--sobre-superficie-var); stroke-width: 1.5; stroke-dasharray: 4 4; stroke-linejoin: round; }
+.leyenda { display: flex; align-items: center; gap: 6px; margin: 2px 0 0; font-size: 11px; color: var(--sobre-superficie-var); }
+.leyenda .muestra { width: 18px; height: 0; border-top: 2px solid var(--calor); }
+.leyenda .muestra.pron { margin-left: 10px; border-top: 1.5px dashed var(--sobre-superficie-var); }
 .grafico .cruz { stroke: var(--sobre-superficie-var); stroke-width: 1; stroke-dasharray: 3 3; pointer-events: none; }
 
 .tabla-dia { width: 100%; font-size: 13px; white-space: normal; }
@@ -352,6 +356,34 @@ td .bajo { color: var(--sobre-superficie-var); }
 .verif-intro { margin: 0 0 8px; }
 .tabla-scroll.sin-margen { padding: 0; }
 .fila-promedio td { font-weight: 600; color: var(--primario); }
+
+/* ---------- Ahora en la estación (dentro de la tarjeta de hoy) ---------- */
+
+.ahora { margin-top: 16px; padding-top: 12px; border-top: 1px solid color-mix(in srgb, var(--sobre-contenedor-primario) 15%, transparent); }
+.ahora-titulo { display: flex; align-items: center; gap: 6px; margin: 0 0 8px; font-size: 13px; font-weight: 500; }
+.ahora-titulo .icono { font-size: 18px; }
+.ahora-titulo small { font-weight: 400; opacity: .8; }
+
+/* ---------- Ayer ---------- */
+
+.ayer-titulo { margin: 0 0 12px; font-size: 14px; font-weight: 500; color: var(--sobre-superficie-var); }
+.comparacion { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
+.comparacion > div { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.comparacion small { font-size: 12px; color: var(--sobre-superficie-var); }
+.comparacion .que { font-weight: 500; }
+.comparacion .numero { font-size: 32px; font-weight: 300; line-height: 1.1; }
+.dif { display: inline-flex; align-items: center; gap: 2px; width: fit-content; margin-top: 4px; padding: 2px 8px; border-radius: 8px; font-size: 12px; font-weight: 500; background: var(--contenedor-alto); }
+.dif .icono { font-size: 14px; }
+.dif.ok { color: var(--primario); }
+.dif.mas { color: var(--calor); }
+.dif.menos { color: var(--frio); }
+.frases { margin: 16px 0 8px; padding-left: 20px; font-size: 14px; line-height: 1.5; }
+.frases li + li { margin-top: 4px; }
+.mas-ayer { margin-top: 12px; }
+.mas-ayer summary { cursor: pointer; font-size: 13px; font-weight: 500; color: var(--primario); }
+.mas-ayer summary + .lectura { margin-top: 10px; }
+.mas-ayer h4 { margin: 18px 0 6px; font-size: 13px; font-weight: 600; color: var(--sobre-superficie-var); }
+.mas-ayer .tabla-dia td small { display: inline; margin-left: 4px; }
 
 /* ---------- Botones ---------- */
 
@@ -445,6 +477,8 @@ td .bajo { color: var(--sobre-superficie-var); }
   .barra { padding: 12px 16px 4px; }
   .tarjeta { padding: 16px 20px; }
   .hoy .maxima { font-size: 60px; }
+  .comparacion { gap: 8px; }
+  .comparacion .numero { font-size: 26px; }
   .lista-dias .fila { grid-template-columns: 3.6em 4.6em 2.2em 1fr 2.2em 20px; padding: 10px 8px 10px 14px; gap: 6px; }
   .detalle-dia { padding: 4px 14px 16px; }
 }

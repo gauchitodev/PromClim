@@ -87,6 +87,32 @@ Para cada día: milímetros promedio, probabilidad promedio y cuántas fuentes
 dan lluvia (1 mm o más). También la lluvia acumulada en 3 y 7 días, la del
 promedio y la de cada fuente.
 
+## La estación de INUMET: ahora y ayer (solo Uruguay)
+
+Si hay una estación automática de INUMET a menos de 40 km:
+
+- **Ahora**: en la tarjeta de hoy se ve lo que mide la estación en este
+  momento: temperatura, humedad, viento y ráfagas, la presión y si viene
+  subiendo o bajando (en las últimas 3 horas; si baja, suele venir mal
+  tiempo), y la lluvia de las últimas 24 horas.
+- **¿Cómo le fue al pronóstico ayer?**: lo que midió la estación al lado de
+  lo que se pronosticaba un día antes, con las conclusiones escritas: si hizo
+  más calor o más frío de lo esperado, si llovió lo que se decía, cuántas
+  fuentes lo vieron venir y cuál se acercó más. Las frases las arma PromClim
+  con los números, no la IA, así que no se equivocan. Al abrir "Hora por
+  hora" se ve la temperatura medida contra la pronosticada, y lo que había
+  dicho cada fuente.
+- El pronóstico de referencia es el promedio que PromClim guardó el día
+  anterior. Si ese día no se guardó (la compu estaba apagada, o el lugar es
+  nuevo), se usa lo que daba Open-Meteo un día antes, que Open-Meteo guarda
+  en su [Previous Runs API](https://open-meteo.com/en/docs/previous-runs-api).
+  De ahí sale también la línea pronosticada del gráfico.
+- El análisis con IA también recibe esto, así puede decir, por ejemplo, que
+  ayer los pronósticos se quedaron cortos con la lluvia.
+
+INUMET marca el viento en "nudos", pero los valores coinciden con los km/h de
+otras fuentes para el mismo lugar y hora, así que PromClim los toma como km/h.
+
 ## ¿Quién acierta acá? (solo Uruguay)
 
 PromClim compara lo que pronosticó cada fuente con lo que midió la estación
@@ -142,6 +168,8 @@ lib/promedio.js        el promedio (media, rango, cuántas fuentes) y la lluvia 
 lib/ia.js              arma el mensaje para la IA y habla con Ollama
 lib/horario.js         hora por hora de Open-Meteo para el detalle de cada día
 lib/verificacion.js    guarda pronósticos y observaciones de INUMET y calcula quién acierta
+lib/estacion.js        lo que mide la estación de INUMET: ahora y hora por hora
+lib/ayer.js            ayer: lo medido contra lo pronosticado, con las conclusiones
 lib/util.js            fetch con timeout, caché en memoria y paso de horas a días
 public/                la página (HTML, CSS y JS sin frameworks)
 public/fuentes/        Roboto Flex y Material Symbols recortados, con sus licencias
@@ -227,8 +255,8 @@ Los íconos (Material Symbols) están recortados a los que usa la página, para
 que pese 5 KB. Para sumar uno, agregalo a la lista y volvé a bajar el archivo:
 
 ```bash
-ICONOS="ac_unit,air,auto_awesome,check_circle,cloud_off,error,expand_more,how_to_vote,location_on,my_location,partly_cloudy_day,remove_circle,search,table_chart,thermostat,travel_explore,umbrella,water_drop"
-UA="Mozilla/5.0 (X11; Linux x86_64) Chrome/130.0"
+ICONOS="ac_unit,air,auto_awesome,check,check_circle,cloud_off,error,expand_more,how_to_vote,humidity_percentage,location_on,my_location,partly_cloudy_day,remove_circle,search,sensors,speed,table_chart,thermostat,travel_explore,umbrella,water_drop"
+UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 URL=$(curl -s -A "$UA" "https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0..1,0&icon_names=$ICONOS" | grep -oE 'https://fonts.gstatic.com/[^)]+')
 curl -s "$URL" -o public/fuentes/material-symbols-rounded.woff2
 ```

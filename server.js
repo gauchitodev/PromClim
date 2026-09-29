@@ -3,7 +3,9 @@
  *
  *   GET /api/buscar?q=Trinidad            → lugares (geocoding de Open-Meteo)
  *   GET /api/pronostico?lat=&lon=&nombre=&detalle=&pais=&zona=
- *                                          → cada fuente + el promedio
+ *                                          → cada fuente + el promedio, y en
+ *                                            Uruguay la estación de INUMET
+ *                                            (ahora y cómo fue ayer)
  *   GET /api/analisis?(lo mismo)           → análisis con IA (Ollama), en texto
  *                                            que va llegando de a pedazos
  *   GET /api/resumen                       → próximos 3 días del último lugar (widgets)
@@ -25,6 +27,7 @@ import {
   MIN_DIAS_PONDERAR, PROMEDIO_PONDERADO, PROMEDIO_SIMPLE,
 } from './lib/verificacion.js';
 import { analizar } from './lib/ia.js';
+import { estacionYAyer } from './lib/ayer.js';
 import { horario } from './lib/horario.js';
 import openmeteo from './lib/fuentes/openmeteo.js';
 import inumet from './lib/fuentes/inumet.js';
@@ -142,6 +145,14 @@ async function pronostico(lugar) {
   const enUruguay = inumet.aplica(lugar, config);
   const pedidoVerificacion = enUruguay ? estadoVerificacion(lugar) : null;
   pedidoVerificacion?.catch(() => {});
+  // Cómo está ahora en la estación y cómo le fue al pronóstico ayer.
+  const nombres = Object.fromEntries(FUENTES.map((f) => [f.id, f.nombre]));
+  const pedidoEstacion = enUruguay
+    ? estacionYAyer(lugar, nombres).catch((e) => {
+      console.warn('[estación]', e.message);
+      return null;
+    })
+    : null;
 
   const fuentes = await Promise.all(FUENTES.map(async (f) => {
     const base = { id: f.id, nombre: f.nombre, web: f.web };
@@ -195,6 +206,7 @@ async function pronostico(lugar) {
     fuentes,
     horario: await pedidoHorario,
     verificacion,
+    estacion: await pedidoEstacion,
   };
 }
 

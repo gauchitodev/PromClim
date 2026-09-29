@@ -159,6 +159,7 @@ function pintar(lugar, datos) {
   pintarHoy(lugar, promedio[0]);
   reiniciarIA();
   pintarDias(datos);
+  pintarAyer(datos.estacion);
   pintarLluvia(acumulados);
   pintarFuentes(fuentes);
   pintarVerificacion(datos.verificacion, fuentes);
@@ -188,6 +189,34 @@ function pintarHoy(lugar, d) {
         icono('umbrella'), `${Math.round(d.prob.prom)} %`),
       d.llueve && el('span', { class: 'chip' }, icono('how_to_vote'), `Llueve para ${consenso(d.llueve)}`),
       d.viento && el('span', { class: 'chip' }, icono('air'), `${Math.round(d.viento.prom)} km/h`)),
+    ahoraEnEstacion(actual?.datos.estacion),
+  );
+}
+
+/** Lo que mide la estación de INUMET en este momento (solo Uruguay). */
+function ahoraEnEstacion(est) {
+  const a = est?.ahora;
+  if (!a) return null;
+  const hora = new Date(a.hora);
+  const hace = (Date.now() - hora) / 3600e3;
+  const cuando = `${String(hora.getHours()).padStart(2, '0')}:${String(hora.getMinutes()).padStart(2, '0')}`;
+  const viento = a.viento != null
+    ? [`${Math.round(a.viento)} km/h`, a.direccion, a.rafaga != null ? `ráfagas de ${Math.round(a.rafaga)}` : null].filter(Boolean).join(', ')
+    : null;
+  return el('div', { class: 'ahora' },
+    el('p', { class: 'ahora-titulo' }, icono('sensors'),
+      `Ahora en la estación ${est.estacion.nombre}`, el('small', {}, hace > 2 ? ` · dato de las ${cuando}` : ` · ${cuando}`)),
+    el('div', { class: 'chips' },
+      el('span', { class: 'chip', title: 'Temperatura medida' }, icono('thermostat'), grados(a.temp)),
+      a.humedad != null && el('span', { class: 'chip', title: 'Humedad' }, icono('humidity_percentage'), `${Math.round(a.humedad)} %`),
+      viento && el('span', { class: 'chip', title: 'Viento' }, icono('air'), viento),
+      a.presion && el('span', {
+        class: 'chip',
+        title: a.presion.cambio3h != null
+          ? `Presión: ${a.presion.cambio3h > 0 ? '+' : ''}${a.presion.cambio3h} hPa en 3 horas. Si baja, suele venir mal tiempo; si sube, mejora.`
+          : 'Presión',
+      }, icono('speed'), `${a.presion.hPa} hPa${a.presion.tendencia ? `, ${a.presion.tendencia}` : ''}`),
+      a.lluvia24 > 0 && el('span', { class: 'chip', title: 'Lluvia de las últimas 24 horas' }, icono('water_drop'), `${mm(a.lluvia24)} en 24 h`)),
   );
 }
 
@@ -293,13 +322,18 @@ function svg(tag, attrs = {}, ...hijos) {
   return e;
 }
 
-function graficosHorarios(horas, anchoPantalla) {
+/**
+ * `opciones.comparar`: nombre del campo de cada hora con una segunda
+ * temperatura (por ejemplo, la pronosticada), que se dibuja punteada.
+ */
+function graficosHorarios(horas, anchoPantalla, opciones = {}) {
+  const { comparar, etiquetas = {}, nota = 'Hora por hora según el mejor modelo de Open-Meteo para este lugar, no el promedio.' } = opciones;
   const W = Math.round(Math.max(280, anchoPantalla || 600)), IZQ = 34, DER = 8;
   const paso = (W - IZQ - DER) / 24;
   const xDe = (h) => IZQ + paso * (h + 0.5);
 
   // Temperatura: línea.
-  const temps = horas.map((h) => h.temp).filter((t) => t !== null);
+  const temps = horas.flatMap((h) => [h.temp, comparar ? h[comparar] : null]).filter((t) => t != null);
   const tMin = Math.floor(Math.min(...temps)) - 1, tMax = Math.ceil(Math.max(...temps)) + 1;
   const HT = 120, ARR = 8, ABA = 8;
   const yT = (t) => ARR + (1 - (t - tMin) / (tMax - tMin || 1)) * (HT - ARR - ABA);
@@ -310,8 +344,12 @@ function graficosHorarios(horas, anchoPantalla) {
       svg('line', { x1: IZQ, x2: W - DER, y1: yT(t), y2: yT(t), class: 'grilla' }),
       svg('text', { x: IZQ - 6, y: yT(t) + 4, class: 'eje', 'text-anchor': 'end' }, `${t}°`));
   }
-  const puntos = horas.filter((h) => h.temp !== null).map((h) => `${xDe(h.hora).toFixed(1)},${yT(h.temp).toFixed(1)}`);
-  graficoT.append(svg('polyline', { points: puntos.join(' '), class: 'linea-temp' }));
+  const linea = (campo, clase) => {
+    const puntos = horas.filter((h) => h[campo] != null).map((h) => `${xDe(h.hora).toFixed(1)},${yT(h[campo]).toFixed(1)}`);
+    graficoT.append(svg('polyline', { points: puntos.join(' '), class: clase }));
+  };
+  if (comparar) linea(comparar, 'linea-pron');
+  linea('temp', 'linea-temp');
 
   // Lluvia: barras desde la base, puntas de arriba redondeadas.
   const HL = 84, BASE = HL - 20;
@@ -354,9 +392,11 @@ function graficosHorarios(horas, anchoPantalla) {
     }
     lectura.replaceChildren(
       el('strong', {}, `${String(h.hora).padStart(2, '0')}:00`),
-      ` · ${grados(h.temp)} · ${mm(h.lluvia ?? 0)}`,
-      h.prob !== null ? ` · ${h.prob} % de lluvia` : '',
-      h.viento !== null ? ` · viento ${Math.round(h.viento)} km/h` : '');
+      comparar
+        ? ` · ${etiquetas.temp || ''} ${grados(h.temp)} · ${etiquetas.comparar || ''} ${grados(h[comparar])} · ${h.lluvia != null ? mm(h.lluvia) : '–'}`
+        : ` · ${grados(h.temp)} · ${mm(h.lluvia ?? 0)}`,
+      h.prob != null ? ` · ${h.prob} % de lluvia` : '',
+      h.viento != null ? ` · viento ${Math.round(h.viento)} km/h` : '');
   };
   for (const g of [graficoT, graficoL]) {
     g.addEventListener('pointermove', (e) => mostrar(e, g));
@@ -364,15 +404,99 @@ function graficosHorarios(horas, anchoPantalla) {
     g.addEventListener('pointerleave', () => cruces.forEach((c) => c.setAttribute('visibility', 'hidden')));
   }
 
+  const leyenda = comparar && el('p', { class: 'leyenda' },
+    el('span', { class: 'muestra temp' }), etiquetas.temp,
+    el('span', { class: 'muestra pron' }), etiquetas.comparar);
   return [
     el('h4', {}, 'Hora por hora'),
     lectura,
     el('p', { class: 'titulo-grafico' }, 'Temperatura'),
+    leyenda,
     graficoT,
-    el('p', { class: 'titulo-grafico' }, 'Lluvia'),
+    el('p', { class: 'titulo-grafico' }, etiquetas.lluvia || 'Lluvia'),
     graficoL,
-    el('p', { class: 'nota-grafico' }, 'Hora por hora según el mejor modelo de Open-Meteo para este lugar, no el promedio.'),
+    el('p', { class: 'nota-grafico' }, nota),
   ];
+}
+
+// ---------------------------------------------------------------------------
+// Ayer: lo que midió la estación contra lo que se pronosticaba (solo Uruguay)
+// ---------------------------------------------------------------------------
+
+function pintarAyer(est) {
+  const ayer = est?.ayer;
+  $('seccion-ayer').hidden = !ayer;
+  if (!ayer) return;
+  const { real, pronostico: pron } = ayer;
+  const f = fecha(ayer.fecha);
+
+  // Temperatura: hasta 1,5° es "como se esperaba". Lluvia: si acertó que
+  // llovía o no, y por menos de 3 mm.
+  const comoSeEsperaba = (r, p, unidad) => (unidad === '°'
+    ? Math.abs(r - p) < 1.5
+    : (r >= 1) === (p >= 1) && Math.abs(r - p) < 3);
+  const diferencia = (r, p, unidad) => {
+    if (r == null || p == null) return el('span', { class: 'dif' }, '–');
+    const d = r - p;
+    if (comoSeEsperaba(r, p, unidad)) return el('span', { class: 'dif ok' }, icono('check'), 'acertó');
+    const n = unidad === '°' ? `${Math.round(Math.abs(d))}°` : mm(Math.round(Math.abs(d) * 10) / 10);
+    return el('span', { class: `dif ${d > 0 ? 'mas' : 'menos'}` }, `${d > 0 ? '+' : '−'}${n} ${d > 0 ? 'más' : 'menos'}`);
+  };
+  const celda = (titulo, r, p, fmt, unidad) => el('div', {},
+    el('small', { class: 'que' }, titulo),
+    el('span', { class: 'numero' }, r != null ? fmt(r) : '–'),
+    el('small', {}, `pronosticado ${p != null ? fmt(p) : '–'}`),
+    diferencia(r, p, unidad));
+
+  const origen = pron.origen === 'promedio'
+    ? 'Pronosticado = el promedio que PromClim guardó un día antes.'
+    : 'Pronosticado = lo que daba Open-Meteo un día antes (PromClim todavía no había guardado ese día).';
+
+  const detalle = el('details', { class: 'mas-ayer' },
+    el('summary', {}, 'Hora por hora', ayer.fuentes.length ? ' y cada fuente' : ''));
+  detalle.addEventListener('toggle', () => {
+    if (!detalle.open || detalle.childElementCount > 1) return;
+    const ancho = detalle.clientWidth;
+    if (ayer.horas.filter((h) => h.temp != null).length >= 12) {
+      // Sin el título "Hora por hora": ya lo dice el botón que lo abre.
+      detalle.append(...graficosHorarios(ayer.horas, ancho, {
+        comparar: 'pron',
+        etiquetas: { temp: 'Medido', comparar: 'Pronosticado', lluvia: 'Lluvia medida' },
+        nota: `Medido en la estación ${est.estacion.nombre}. La línea punteada es lo que daba Open-Meteo un día antes.`,
+      }).slice(1));
+    }
+    if (ayer.fuentes.length) {
+      const guion = () => el('span', { class: 'bajo' }, '–');
+      const conError = (v, e) => (v == null ? guion() : [grados(v), e != null && Math.round(e) !== 0
+        ? el('small', {}, `${e > 0 ? '+' : '−'}${Math.round(Math.abs(e))}°`) : '']);
+      detalle.append(
+        el('h4', {}, 'Qué había dicho cada fuente'),
+        el('div', { class: 'tabla-scroll sin-margen' }, el('table', { class: 'tabla-dia' },
+          el('thead', {}, el('tr', {}, el('th', {}, 'Fuente'), el('th', {}, 'Máx'), el('th', {}, 'Mín'), el('th', {}, 'Lluvia'))),
+          el('tbody', {},
+            el('tr', { class: 'fila-promedio' }, el('td', {}, 'Lo que pasó'), el('td', {}, grados(real.max)),
+              el('td', {}, grados(real.min)), el('td', {}, real.lluvia != null ? mm(real.lluvia) : guion())),
+            ayer.fuentes.map((x) => el('tr', {},
+              el('td', {}, x.nombre),
+              el('td', {}, conError(x.max, x.errorMax)),
+              el('td', {}, conError(x.min, x.errorMin)),
+              el('td', {}, x.lluvia != null ? mm(x.lluvia) : guion())))),
+        )),
+      );
+    }
+  });
+
+  $('ayer').replaceChildren(
+    el('p', { class: 'ayer-titulo' }, `${DIAS_LARGOS[f.getDay()]} ${f.getDate()}, medido en ${est.estacion.nombre}`),
+    el('div', { class: 'comparacion' },
+      celda('Máxima', real.max, pron.max, grados, '°'),
+      celda('Mínima', real.min, pron.min, grados, '°'),
+      celda('Lluvia', real.lluvia, pron.lluvia, mm, 'mm')),
+    el('ul', { class: 'frases' }, ayer.frases.map((x) => el('li', {}, x))),
+    el('p', { class: 'nota-grafico' }, origen,
+      ' La estación mide cada hora, así que la máxima y la mínima reales pueden ser un poco más extremas.'),
+    detalle,
+  );
 }
 
 function pintarLluvia(ac) {
