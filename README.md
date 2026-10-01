@@ -49,15 +49,16 @@ programas. Si lo necesitás para otra cosa, cambiá `"puerto"` en
 | 7Timer! | 7 días, solo máxima y mínima (modelo GFS) |
 
 **Con clave gratis** (se activan cuando ponés la clave en `config.local.json`).
-**Ojo: estas cinco están escritas según la documentación de cada API pero todavía no
-se probaron con una clave real.** Si alguna falla, abrí un issue:
+Foreca, WeatherAPI.com y Visual Crossing ya se probaron con claves reales (octubre
+de 2026). **AccuWeather y OpenWeatherMap todavía no**: están escritas según la
+documentación de cada API. Si alguna falla, abrí un issue:
 
 | Fuente | Plan gratis | Dónde se saca |
 |---|---|---|
-| AccuWeather | 50 consultas por día, 5 días | <https://developer.accuweather.com> |
+| AccuWeather | ya no tiene plan gratis para cuentas nuevas | <https://developer.accuweather.com> |
 | Foreca | prueba de 30 días | <https://developer.foreca.com> |
 | OpenWeatherMap | 5 días | <https://home.openweathermap.org/api_keys> |
-| WeatherAPI.com | 3 días | <https://www.weatherapi.com/signup.aspx> |
+| WeatherAPI.com | 3 días (los primeros 14 días de la cuenta da 10) | <https://www.weatherapi.com/signup.aspx> |
 | Visual Crossing | 1000 registros por día | <https://www.visualcrossing.com/sign-up> |
 
 - Cada proveedor cuenta **una vez** en el promedio: los 9 modelos de Open-Meteo
