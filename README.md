@@ -109,6 +109,12 @@ Si hay una estación automática de INUMET a menos de 40 km:
   De ahí sale también la línea pronosticada del gráfico.
 - El análisis con IA también recibe esto, así puede decir, por ejemplo, que
   ayer los pronósticos se quedaron cortos con la lluvia.
+- **Historial de aciertos**: lo mismo que "ayer", pero para los últimos 30
+  días con medición: cuántos días le embocó a la temperatura (1° o menos de
+  diferencia) y a la lluvia (si llovía o no, y por menos de 3 mm), el error
+  medio, y cada día con su marca de acierto y sus frases. Arranca lleno
+  aunque el lugar sea nuevo (con lo que daba Open-Meteo un día antes) y con
+  el tiempo se va llenando con el promedio propio de PromClim.
 
 INUMET marca el viento en "nudos", pero los valores coinciden con los km/h de
 otras fuentes para el mismo lugar y hora, así que PromClim los toma como km/h.
@@ -170,6 +176,7 @@ lib/horario.js         hora por hora de Open-Meteo para el detalle de cada día
 lib/verificacion.js    guarda pronósticos y observaciones de INUMET y calcula quién acierta
 lib/estacion.js        lo que mide la estación de INUMET: ahora y hora por hora
 lib/ayer.js            ayer: lo medido contra lo pronosticado, con las conclusiones
+lib/historial.js       lo mismo que ayer para los últimos 30 días, con el resumen de aciertos
 lib/util.js            fetch con timeout, caché en memoria y paso de horas a días
 public/                la página (HTML, CSS y JS sin frameworks)
 public/fuentes/        Roboto Flex y Material Symbols recortados, con sus licencias
@@ -255,7 +262,7 @@ Los íconos (Material Symbols) están recortados a los que usa la página, para
 que pese 5 KB. Para sumar uno, agregalo a la lista y volvé a bajar el archivo:
 
 ```bash
-ICONOS="ac_unit,air,auto_awesome,check,check_circle,cloud_off,error,expand_more,how_to_vote,humidity_percentage,location_on,my_location,partly_cloudy_day,remove_circle,search,sensors,speed,table_chart,thermostat,travel_explore,umbrella,water_drop"
+ICONOS="ac_unit,air,auto_awesome,check,check_circle,close,cloud_off,error,expand_more,how_to_vote,humidity_percentage,location_on,my_location,partly_cloudy_day,remove_circle,search,sensors,speed,table_chart,thermostat,travel_explore,umbrella,water_drop"
 UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
 URL=$(curl -s -A "$UA" "https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0..1,0&icon_names=$ICONOS" | grep -oE 'https://fonts.gstatic.com/[^)]+')
 curl -s "$URL" -o public/fuentes/material-symbols-rounded.woff2

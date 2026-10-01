@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { conclusiones } from '../lib/ayer.js';
 import { ahora, direccionTexto, horasDelDia, serieEstacion } from '../lib/estacion.js';
 
-test('temperaturas dentro de 1,5° salen "como se esperaba"', () => {
+test('temperaturas a 1° o menos (redondeadas) salen "como se esperaba"', () => {
   const f = conclusiones({ max: 20.8, min: 13.8, lluvia: 0 }, { max: 22, min: 14.1, lluvia: 0 });
   assert.deepEqual(f, [
     'Las temperaturas salieron como se esperaba: máxima de 21° y mínima de 14°.',

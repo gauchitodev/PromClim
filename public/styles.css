@@ -379,6 +379,25 @@ td .bajo { color: var(--sobre-superficie-var); }
 .dif.menos { color: var(--frio); }
 .frases { margin: 16px 0 8px; padding-left: 20px; font-size: 14px; line-height: 1.5; }
 .frases li + li { margin-top: 4px; }
+/* Historial de aciertos */
+.encabezado-hist, .fila-hist { display: grid; grid-template-columns: 4.5em 1fr 1fr auto; gap: 8px; align-items: center; }
+.encabezado-hist { margin: 20px 0 4px; padding: 0 4px; font-size: 12px; font-weight: 500; color: var(--sobre-superficie-var); }
+.lista-hist { margin: 0; padding: 0; list-style: none; }
+.lista-hist > li + li { border-top: 1px solid color-mix(in srgb, var(--contorno) 50%, transparent); }
+.fila-hist { padding: 10px 4px; cursor: pointer; list-style: none; font-size: 14px; }
+.fila-hist::-webkit-details-marker { display: none; }
+.fila-hist:hover { background: color-mix(in srgb, var(--sobre-superficie) 5%, transparent); }
+.fila-hist:focus-visible { outline: 2px solid var(--primario); outline-offset: -2px; }
+.fila-hist .dia { font-weight: 500; }
+.fila-hist small { display: block; font-size: 11px; color: var(--sobre-superficie-var); }
+.lista-hist details[open] { padding-bottom: 8px; }
+.lista-hist .frases { margin-top: 4px; }
+.marcas { display: flex; gap: 4px; }
+.marca { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border-radius: 12px; background: var(--contenedor-alto); color: var(--sobre-superficie-var); font-size: 12px; }
+.marca .icono { font-size: 16px; }
+.marca.ok { color: var(--primario); background: color-mix(in srgb, var(--primario) 14%, transparent); }
+.marca.error { color: var(--error); background: color-mix(in srgb, var(--error) 12%, transparent); }
+
 .mas-ayer { margin-top: 12px; }
 .mas-ayer summary { cursor: pointer; font-size: 13px; font-weight: 500; color: var(--primario); }
 .mas-ayer summary + .lectura { margin-top: 10px; }

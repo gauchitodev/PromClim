@@ -28,6 +28,7 @@ import {
 } from './lib/verificacion.js';
 import { analizar } from './lib/ia.js';
 import { estacionYAyer } from './lib/ayer.js';
+import { historial } from './lib/historial.js';
 import { horario } from './lib/horario.js';
 import openmeteo from './lib/fuentes/openmeteo.js';
 import inumet from './lib/fuentes/inumet.js';
@@ -153,6 +154,12 @@ async function pronostico(lugar) {
       return null;
     })
     : null;
+  const pedidoHistorial = enUruguay
+    ? historial(lugar, nombres).catch((e) => {
+      console.warn('[historial]', e.message);
+      return null;
+    })
+    : null;
 
   const fuentes = await Promise.all(FUENTES.map(async (f) => {
     const base = { id: f.id, nombre: f.nombre, web: f.web };
@@ -207,6 +214,7 @@ async function pronostico(lugar) {
     horario: await pedidoHorario,
     verificacion,
     estacion: await pedidoEstacion,
+    historial: await pedidoHistorial,
   };
 }
 

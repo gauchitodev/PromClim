@@ -160,6 +160,7 @@ function pintar(lugar, datos) {
   reiniciarIA();
   pintarDias(datos);
   pintarAyer(datos.estacion);
+  pintarHistorial(datos.historial);
   pintarLluvia(acumulados);
   pintarFuentes(fuentes);
   pintarVerificacion(datos.verificacion, fuentes);
@@ -430,10 +431,10 @@ function pintarAyer(est) {
   const { real, pronostico: pron } = ayer;
   const f = fecha(ayer.fecha);
 
-  // Temperatura: hasta 1,5° es "como se esperaba". Lluvia: si acertó que
-  // llovía o no, y por menos de 3 mm.
+  // Temperatura: hasta 1° de diferencia entre los números que se muestran es
+  // "como se esperaba". Lluvia: si acertó que llovía o no, y por menos de 3 mm.
   const comoSeEsperaba = (r, p, unidad) => (unidad === '°'
-    ? Math.abs(r - p) < 1.5
+    ? Math.abs(Math.round(r) - Math.round(p)) <= 1
     : (r >= 1) === (p >= 1) && Math.abs(r - p) < 3);
   const diferencia = (r, p, unidad) => {
     if (r == null || p == null) return el('span', { class: 'dif' }, '–');
@@ -589,6 +590,60 @@ function pintarVerificacion(v, fuentes) {
       ? 'El promedio de arriba ya está ponderado: pesa más a las fuentes con menos error acá.'
       : `Con ${v.minDias} días verificados por fuente el promedio empieza a ponderar por aciertos (van ${maxDias}).`,
       ' La estación mide cada hora, así que la máxima y la mínima reales pueden ser un poco más extremas.'),
+  );
+}
+
+// ---------------------------------------------------------------------------
+// Historial: el reporte de "ayer" para cada uno de los últimos días
+// ---------------------------------------------------------------------------
+
+function pintarHistorial(h) {
+  const dias = h?.dias || [];
+  $('seccion-historial').hidden = !dias.length;
+  if (!dias.length) return;
+  const r = h.resumen;
+
+  const cuenta = (titulo, c, pie) => el('div', {},
+    el('small', { class: 'que' }, titulo),
+    el('span', { class: 'numero' }, c.de ? `${c.aciertos} de ${c.de}` : '–'),
+    el('small', {}, pie));
+  const marca = (ok, que) => (ok == null
+    ? el('span', { class: 'marca' }, '–')
+    : el('span', { class: `marca ${ok ? 'ok' : 'error'}`, title: `${que}: ${ok ? 'acertó' : 'le erró'}` }, icono(ok ? 'check' : 'close')));
+  const lluvia = (v) => (v == null ? '–' : mm(v));
+
+  const filas = dias.map((d) => {
+    const f = fecha(d.fecha);
+    const { real, pronostico: p } = d;
+    return el('li', {}, el('details', {},
+      el('summary', { class: 'fila-hist' },
+        el('span', { class: 'dia' }, `${DIAS[f.getDay()]} ${f.getDate()}`),
+        el('span', {}, `${grados(real.max)} / ${grados(real.min)}`, el('small', {}, `pron. ${grados(p.max)} / ${grados(p.min)}`)),
+        el('span', {}, lluvia(real.lluvia), el('small', {}, `pron. ${lluvia(p.lluvia)}`)),
+        el('span', { class: 'marcas' }, marca(d.acierto.temp, 'Temperatura'), marca(d.acierto.lluvia, 'Lluvia'))),
+      el('ul', { class: 'frases' }, d.frases.map((x) => el('li', {}, x))),
+      el('p', { class: 'nota-grafico' }, p.origen === 'promedio'
+        ? 'Pronosticado = el promedio que PromClim guardó un día antes.'
+        : 'Pronosticado = lo que daba Open-Meteo un día antes (PromClim no había guardado ese día).'),
+    ));
+  });
+
+  const n = dias.length;
+  $('historial').replaceChildren(
+    el('p', { class: 'ayer-titulo' }, `Últimos ${n} ${n === 1 ? 'día' : 'días'}, medidos en ${h.estacion.nombre}`),
+    el('div', { class: 'comparacion' },
+      cuenta('Temperatura', r.temp, 'días con máx. y mín. a 1° o menos'),
+      cuenta('Lluvia', r.lluvia, 'días que acertó si llovía o no'),
+      el('div', {},
+        el('small', { class: 'que' }, 'Error medio'),
+        el('span', { class: 'numero' }, r.errorMax != null ? `±${r.errorMax}°` : '–'),
+        el('small', {}, `en la máxima${r.errorMin != null ? `; ±${r.errorMin}° en la mínima` : ''}`))),
+    el('div', { class: 'encabezado-hist' },
+      el('span', {}, 'Día'), el('span', {}, 'Máx / mín'), el('span', {}, 'Lluvia'), el('span', {}, 'Acertó')),
+    el('ul', { class: 'lista-hist' }, filas),
+    el('p', { class: 'nota-grafico' },
+      'Cada día se compara con lo pronosticado un día antes. Tocá un día para ver el detalle.',
+      r.deOpenMeteo ? ` ${r.deOpenMeteo === n ? 'Todos los días' : `${r.deOpenMeteo} de los ${n} días`} usan lo que daba Open-Meteo, porque PromClim todavía no los tenía guardados; con el tiempo se va llenando con el promedio propio.` : ''),
   );
 }
 
