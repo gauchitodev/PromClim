@@ -23,7 +23,7 @@ import { fileURLToPath } from 'node:url';
 import { pedirJSON, conCache } from './lib/util.js';
 import { promedioGeneral, acumulados, comoFuente } from './lib/promedio.js';
 import {
-  estadoVerificacion, pesos, registrarObservaciones, registrarPronostico,
+  claveLugar, estadoVerificacion, lugaresRecientes, pesos, registrarObservaciones, registrarPronostico,
   MIN_DIAS_PONDERAR, PROMEDIO_PONDERADO, PROMEDIO_SIMPLE,
 } from './lib/verificacion.js';
 import { analizar } from './lib/ia.js';
@@ -210,11 +210,17 @@ async function pronostico(lugar) {
   };
 }
 
-/** Lo que corre el temporizador: pronóstico del último lugar y observaciones. */
+/**
+ * Lo que corre el temporizador: el pronóstico del último lugar y de los que
+ * se miraron en las últimas dos semanas, y después las observaciones.
+ */
 async function registrar() {
-  const lugar = leerUltimoLugar();
-  if (lugar) await pronostico(lugar);
-  return { lugar: lugar?.nombre ?? null, ...(await registrarObservaciones()) };
+  const lugares = new Map();
+  for (const l of [leerUltimoLugar(), ...lugaresRecientes()]) {
+    if (l && !lugares.has(claveLugar(l))) lugares.set(claveLugar(l), l);
+  }
+  for (const l of lugares.values()) await pronostico(l);
+  return { lugares: [...lugares.values()].map((l) => l.nombre), ...(await registrarObservaciones()) };
 }
 
 // ---------------------------------------------------------------------------

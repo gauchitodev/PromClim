@@ -6,4 +6,4 @@ After=promclim.socket network-online.target
 
 [Service]
 Type=oneshot
-ExecStart=__NODE__ -e "fetch('http://127.0.0.1:__PUERTO__/api/registrar',{signal:AbortSignal.timeout(120000)}).then(r=>r.text()).then(t=>console.log(t)).catch(e=>{console.error(e.message);process.exit(1)})"
+ExecStart=__NODE__ __CARPETA__/sistema/registrar.mjs __PUERTO__

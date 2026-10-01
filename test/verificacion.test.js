@@ -88,9 +88,12 @@ test('guarda una emisión por día y solo de los días siguientes', () => {
       { fecha: hoy, max: 1, min: 1, lluvia: 1, prob: 50 }, { fecha: m, max: 20, min: 10, lluvia: 2, prob: 70 },
     ] }];
 
+    // Sin internet ninguna fuente responde: no guarda nada y no tapa la buena.
+    const sinRed = registrarPronostico(lugar, [{ id: 'a', estado: 'error', dias: [] }], { _simple: [] });
     const primera = registrarPronostico(lugar, fuentes, { _simple: [{ fecha: m, max: 20, min: 10, lluvia: 2 }] });
     const segunda = registrarPronostico(lugar, fuentes, {});
     if (hora < 6) return; // antes de las 6 no guarda: nada más que probar
+    assert.equal(sinRed, false);
     assert.equal(primera, true);
     assert.equal(segunda, false);
     const guardado = JSON.parse(readFileSync(path.join(carpeta, 'pronosticos.json'), 'utf8'))['-33.50,-56.90'];
